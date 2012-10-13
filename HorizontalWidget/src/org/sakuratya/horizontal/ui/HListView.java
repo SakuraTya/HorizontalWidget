@@ -179,6 +179,14 @@ public class HListView extends AdapterView<ListAdapter> {
 		return INVALID_POSITION;
 	}
 
+	private int amountToScroll(int direction, int nextSelectedPosition) {
+		final int listLeft = 0;
+		final int listRight = getWidth();
+		
+		final int numChildren = getChildCount();
+		
+		return 0;
+	}
 	@Override
 	public void requestLayout() {
 		if(!mInLayout) {
