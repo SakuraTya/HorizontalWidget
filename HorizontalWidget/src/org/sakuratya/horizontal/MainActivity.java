@@ -3,6 +3,7 @@ package org.sakuratya.horizontal;
 import java.util.ArrayList;
 import org.sakuratya.horizontal.HorizontalListView;
 import org.sakuratya.horizontal.adapter.HAdapter;
+import org.sakuratya.horizontal.ui.HListView;
 
 import android.os.Bundle;
 import android.app.Activity;
@@ -10,7 +11,7 @@ import android.view.Menu;
 
 public class MainActivity extends Activity {
 
-    private HorizontalListView mHListView;
+    private HListView mHListView;
 
     private ArrayList<String> testList = new ArrayList<String>();
     
@@ -19,7 +20,7 @@ public class MainActivity extends Activity {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
         
-        mHListView = (HorizontalListView) findViewById(R.id.h_list_view);
+        mHListView = (HListView) findViewById(R.id.h_list_view);
         
         for(int i=0; i<1000; i++) {
         	testList.add("item:" + i);

@@ -3,17 +3,60 @@ package org.sakuratya.horizontal.ui;
 import java.util.ArrayList;
 
 import android.content.Context;
+import android.database.DataSetObserver;
+import android.graphics.Canvas;
 import android.graphics.Rect;
 import android.graphics.drawable.Drawable;
 import android.util.AttributeSet;
-import android.util.StateSet;
 import android.view.KeyEvent;
 import android.view.View;
 import android.view.ViewGroup;
+import android.widget.AbsListView;
 import android.widget.AdapterView;
 import android.widget.ListAdapter;
 
 public class HListView extends AdapterView<ListAdapter> {
+	/**
+     * Used to indicate a no preference for a position type.
+     */
+    static final int NO_POSITION = -1;
+    
+    /**
+     * Regular layout - usually an unsolicited layout from the view system
+     */
+    static final int LAYOUT_NORMAL = 0;
+
+    /**
+     * Show the first item
+     */
+    static final int LAYOUT_FORCE_TOP = 1;
+
+    /**
+     * Force the selected item to be on somewhere on the screen
+     */
+    static final int LAYOUT_SET_SELECTION = 2;
+
+    /**
+     * Show the last item
+     */
+    static final int LAYOUT_FORCE_BOTTOM = 3;
+
+    /**
+     * Make a mSelectedItem appear in a specific location and build the rest of
+     * the views from there. The top is specified by mSpecificTop.
+     */
+    static final int LAYOUT_SPECIFIC = 4;
+
+    /**
+     * Layout to sync as a result of a data change. Restore mSyncPosition to have its top
+     * at mSpecificTop
+     */
+    static final int LAYOUT_SYNC = 5;
+
+    /**
+     * Layout as a result of using the navigation keys
+     */
+    static final int LAYOUT_MOVE_SELECTION = 6;
 	
 	protected boolean mDataChanged;
 	
@@ -79,6 +122,11 @@ public class HListView extends AdapterView<ListAdapter> {
     
     private int mSelectedLeft;
     
+    private boolean mDrawSelectorOnTop = false;
+    
+    private AdapterDataSetObserver mDataSetObserver;
+    
+    private int mLayoutMode;
 	public HListView(Context context, AttributeSet attrs, int defStyle) {
 		super(context, attrs, defStyle);
 	}
@@ -93,8 +141,7 @@ public class HListView extends AdapterView<ListAdapter> {
 
 	@Override
 	public ListAdapter getAdapter() {
-		// TODO Auto-generated method stub
-		return null;
+		return mAdapter;
 	}
 	
 	public static class LayoutParams extends ViewGroup.LayoutParams {
@@ -117,14 +164,26 @@ public class HListView extends AdapterView<ListAdapter> {
 
 	@Override
 	public void setAdapter(ListAdapter adapter) {
-		// TODO Auto-generated method stub
-		
+		if(mAdapter!=null && mDataSetObserver!=null) {
+			mAdapter.unregisterDataSetObserver(mDataSetObserver);
+		}
+		resetList();
+		mRecycler.clear();
+		if(mAdapter!=null) {
+			mDataSetObserver = new AdapterDataSetObserver();
+			int position = lookForSelectablePosition(0);
+			setSelectedPositionInt(position);
+		}
+		requestLayout();
 	}
 
 	@Override
 	public View getSelectedView() {
-		// TODO Auto-generated method stub
-		return null;
+		if(mAdapter.getCount() > 0 && mSelectedPosition > 0) {
+			return getChildAt(mSelectedPosition);
+		} else {
+			return null;
+		}
 	}
 
 	@Override
@@ -133,10 +192,136 @@ public class HListView extends AdapterView<ListAdapter> {
 		
 	}
 	
-	protected void layoutChildren() {
+	@Override
+	protected void onMeasure(int widthMeasureSpec, int heightMeasureSpec) {
+		super.onMeasure(widthMeasureSpec, heightMeasureSpec);
+		int widthMode = MeasureSpec.getMode(widthMeasureSpec);
+		int widthSize = MeasureSpec.getSize(widthMeasureSpec);
+		int heightMode = MeasureSpec.getMode(heightMeasureSpec);
+		int heightSize = MeasureSpec.getSize(heightMeasureSpec);
 		
+		int childWidth = 0;
+		int childHeight = 0;
+		final int itemCount = mAdapter ==null ? 0: mAdapter.getCount();
+		if(itemCount > 0 && (widthMode==MeasureSpec.UNSPECIFIED || heightMode == MeasureSpec.UNSPECIFIED)){
+			final View child = obtainView(0, mIsScrap);
+			measureScrapChild(child, 0, heightMeasureSpec);
+			childWidth = child.getMeasuredWidth();
+			mRecycler.addScrapView(child, -1);
+		}
+		
+		if(widthMode == MeasureSpec.AT_MOST) {
+			widthSize = measureWidthOfChildren(widthMeasureSpec, 0, NO_POSITION, heightSize, -1);
+		}
+	}
+	
+	private void measureScrapChild(View child, int position, int heightMeasureSpec) {
+		HListView.LayoutParams p = (HListView.LayoutParams) child.getLayoutParams();
+		if(p==null) {
+			p = new HListView.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.MATCH_PARENT);
+			child.setLayoutParams(p);
+		}
+		int childHeightSpec = ViewGroup.getChildMeasureSpec(heightMeasureSpec, 0, p.height);
+		int lpWidth = p.width;
+		int childWidthSpec;
+		if(lpWidth > 0) {
+			childWidthSpec = MeasureSpec.makeMeasureSpec(lpWidth, MeasureSpec.EXACTLY);
+		} else {
+			childWidthSpec = MeasureSpec.makeMeasureSpec(0, MeasureSpec.UNSPECIFIED);
+		}
+		child.measure(childWidthSpec, childHeightSpec);
 	}
 
+	private final int measureWidthOfChildren(int heightMeasureSpec, int startPosition, int endPosition, final int maxWidth, int disallowPartialChildPosition) {
+		final ListAdapter adapter = mAdapter;
+		if(adapter==null) {
+			return 0;
+		}
+		int returnedWidth = 0;
+		// The previous height value that was less than maxHeight and contained
+		// no partial children
+        int prevHeightWithoutPartialChild = 0;
+        int i;
+        View child;
+        // mItemCount - 1 since endPosition parameter is inclusive
+        endPosition = (endPosition == NO_POSITION) ? adapter.getCount() - 1 : endPosition;
+        final RecycleBin recycleBin = mRecycler;
+        final boolean[] isScrap = mIsScrap;
+        for(i=startPosition; i< endPosition; ++i) {
+        	child = obtainView(i, isScrap);
+        	measureScrapChild(child, i, heightMeasureSpec);
+        	recycleBin.addScrapView(child, -1);
+        	returnedWidth += child.getMeasuredWidth();
+        	if(returnedWidth > maxWidth) {
+        		return (disallowPartialChildPosition > 0) 
+        				&& (i>disallowPartialChildPosition) 
+        				&& (prevHeightWithoutPartialChild > 0) 
+        				&& (returnedWidth != maxWidth)?prevHeightWithoutPartialChild:maxWidth;
+        	}
+        	
+        	if ((disallowPartialChildPosition >= 0) && (i >= disallowPartialChildPosition)) {
+                prevHeightWithoutPartialChild = returnedWidth;
+            }
+        }
+        return returnedWidth;
+	}
+	@Override
+	protected void onLayout(boolean changed, int left, int top, int right,
+			int bottom) {
+		super.onLayout(changed, left, top, right, bottom);
+		layoutChildren();
+	}
+
+	protected void layoutChildren() {
+		if(!mInLayout) {
+			mInLayout = true;
+		} else {
+			return;
+		}
+		
+		try {
+			invalidate();
+			if(mAdapter==null) {
+				resetList();
+				return;
+			}
+			int childrenLeft = 0;
+			int childrenRight = getRight();
+			
+			int childrenCount = getChildCount();
+			int index = 0;
+			int delta = 0;
+			
+			View sel;
+            View oldSel = null;
+            View oldFirst = null;
+            View newSel = null;
+            
+            View focusLayoutRestoreView = null;
+            
+            switch(mLayoutMode) {
+            case LAYOUT_MOVE_SELECTION:
+            default:
+            	index = mSelectedPosition - mFirstPosition;
+            }
+		} finally {
+			mInLayout = false;
+		}
+	}
+	
+	private int lookForSelectablePosition(int position) {
+		final ListAdapter adapter= mAdapter;
+		final int count = adapter.getCount();
+		position = Math.max(0, position);
+        while (position < count && !adapter.isEnabled(position)) {
+            position++;
+        }
+        if (position < 0 || position >= count) {
+            return INVALID_POSITION;
+        }
+		return position;
+	}
+	
 	@Override
 	public boolean onKeyDown(int keyCode, KeyEvent event) {
 		return commonKey(keyCode, 1, event);
@@ -420,7 +605,7 @@ public class HListView extends AdapterView<ListAdapter> {
 			View last = getChildAt(numChildren -1);
 			while(last.getRight()<listRight) {
 				final int lastVisiblePosition = mFirstPosition + numChildren - 1;
-				if(lastVisiblePosition < getCount() - 1) {
+				if(lastVisiblePosition < mAdapter.getCount() - 1) {
 					last = addViewAfter(last, lastVisiblePosition);
 					numChildren++;
 				} else {
@@ -572,8 +757,55 @@ public class HListView extends AdapterView<ListAdapter> {
         }
 	}
 	
+
+	public void setDrawSelectorOnTop(boolean onTop) {
+		mDrawSelectorOnTop = onTop;
+	}
+	
+	public void setSelector(int resID) {
+		setSelector(getResources().getDrawable(resID));
+	}
+	
+	public void setSelector(Drawable sel) {
+		if(mSelector!=null) {
+			mSelector.setCallback(null);
+			unscheduleDrawable(mSelector);
+		}
+		mSelector = sel;
+		Rect padding = new Rect();
+		sel.getPadding(padding);
+		mSelectionLeftPadding = padding.left;
+		mSelectionTopPadding = padding.top;
+		mSelectionRightPadding = padding.right;
+		mSelectionBottomPadding = padding.bottom;
+		sel.setCallback(this);
+		updateSelectorState();
+	}
+	
+
+	@Override
+	protected void dispatchDraw(Canvas canvas) {
+		final boolean drawSelectorOnTop =  mDrawSelectorOnTop;
+		if(!drawSelectorOnTop) {
+			drawSelector(canvas);
+		}
+		super.dispatchDraw(canvas);
+		if(drawSelectorOnTop) {
+			drawSelector(canvas);
+		}
+	}
+	
+	private void drawSelector(Canvas canvas) {
+		if(!mSelectRect.isEmpty()) {
+			final Drawable selector = mSelector;
+			selector.setBounds(mSelectRect);
+			selector.draw(canvas);
+		}
+	}
+	
+	
 	class RecycleBin {
-		private ArrayList<View> mScrapViews;
+		private ArrayList<View> mScrapViews = new ArrayList<View>();
 		
 		public void addScrapView(View scrap, int position) {
 			HListView.LayoutParams lp = (HListView.LayoutParams) scrap.getLayoutParams();
@@ -599,7 +831,40 @@ public class HListView extends AdapterView<ListAdapter> {
 		}
 		
 		public void clear(){
-			
+			final ArrayList<View> scrap = mScrapViews;
+			final int scrapCount = scrap.size();
+			for(int i=0; i<scrapCount;i++) {
+				removeDetachedView(scrap.remove(scrapCount - i - 1), false);
+			}
 		}
+	}
+	
+	protected class AdapterDataSetObserver extends DataSetObserver {
+
+		@Override
+		public void onChanged() {
+			mDataChanged = true;
+			invalidate();
+			requestLayout();
+		}
+
+		@Override
+		public void onInvalidated() {
+			resetList();
+			invalidate();
+			requestLayout();
+		}
+		
+	}
+	
+	private void resetList() {
+		removeAllViewsInLayout();
+		mFirstPosition = 0;
+		mDataChanged = false;
+		setSelectedPositionInt(INVALID_POSITION);
+		mSelectedPosition = INVALID_POSITION;
+		mSelectedLeft = 0;
+		mSelectRect.setEmpty();
+		invalidate();
 	}
 }

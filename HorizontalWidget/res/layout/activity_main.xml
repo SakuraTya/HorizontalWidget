@@ -2,10 +2,10 @@
     xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
     android:layout_height="match_parent" >
-    <org.sakuratya.horizontal.ui.HorizontalListView
+    <org.sakuratya.horizontal.ui.HListView
         android:id="@+id/h_list_view"
         android:layout_width="match_parent"
         android:layout_height="match_parent">
         
-    </org.sakuratya.horizontal.ui.HorizontalListView>
+    </org.sakuratya.horizontal.ui.HListView>
 </RelativeLayout>
