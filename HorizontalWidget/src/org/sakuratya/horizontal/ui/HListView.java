@@ -1,5 +1,7 @@
 package org.sakuratya.horizontal.ui;
 
+import java.util.ArrayList;
+
 import android.content.Context;
 import android.graphics.Rect;
 import android.graphics.drawable.Drawable;
@@ -7,6 +9,7 @@ import android.util.AttributeSet;
 import android.util.StateSet;
 import android.view.KeyEvent;
 import android.view.View;
+import android.view.ViewGroup;
 import android.widget.AdapterView;
 import android.widget.ListAdapter;
 
@@ -65,25 +68,51 @@ public class HListView extends AdapterView<ListAdapter> {
      * The select child's view (from the adapter's getView) is enabled.
      */
     private boolean mIsChildViewEnabled;
+    
+    protected RecycleBin mRecycler = new RecycleBin();
+    
+    final boolean[] mIsScrap = new boolean[1];
+    /**
+     * Subclasses must retain their measure spec from onMeasure() into this member
+     */
+    int mHeightMeasureSpec = 0;
+    
+    private int mSelectedLeft;
+    
 	public HListView(Context context, AttributeSet attrs, int defStyle) {
 		super(context, attrs, defStyle);
-		// TODO Auto-generated constructor stub
 	}
 
 	public HListView(Context context, AttributeSet attrs) {
 		super(context, attrs);
-		// TODO Auto-generated constructor stub
 	}
 
 	public HListView(Context context) {
 		super(context);
-		// TODO Auto-generated constructor stub
 	}
 
 	@Override
 	public ListAdapter getAdapter() {
 		// TODO Auto-generated method stub
 		return null;
+	}
+	
+	public static class LayoutParams extends ViewGroup.LayoutParams {
+		
+		public int scrappedFromPosition;
+
+		public LayoutParams(Context arg0, AttributeSet arg1) {
+			super(arg0, arg1);
+		}
+
+		public LayoutParams(int arg0, int arg1) {
+			super(arg0, arg1);
+		}
+
+		public LayoutParams(android.view.ViewGroup.LayoutParams arg0) {
+			super(arg0);
+		}
+		
 	}
 
 	@Override
@@ -187,11 +216,32 @@ public class HListView extends AdapterView<ListAdapter> {
 		
 		boolean needToRedraw = false;
 		if(nextSelectedPosition != INVALID_POSITION) {
-			
+			setSelectedPositionInt(nextSelectedPosition);
+			needToRedraw = true;
+		}
+		
+		if(amountToScroll > 0) {
+			scrollListItemBy(direction==FOCUS_LEFT? -amountToScroll : amountToScroll);
+			needToRedraw = true;
+		}
+		
+		if(needToRedraw) {
+			if(selectedView!=null) {
+				positionSelector(selectedPos, selectedView);
+				mSelectedLeft = selectedView.getLeft();
+				if (!awakenScrollBars()) {
+	                invalidate();
+	            }
+				return true;
+			}
 		}
 		return false;
 	}
 	
+	private void setSelectedPositionInt(int position) {
+		mSelectedPosition = position;
+	}
+
 	private int lookForSelectablePositionOnScreen(int direction) {
 		final int firstPosition = mFirstPosition;
 		if(direction==FOCUS_RIGHT) {
@@ -352,6 +402,102 @@ public class HListView extends AdapterView<ListAdapter> {
 		updateSelectorState();
 	}
 
+	
+	/**
+     * Scroll the children by amount, adding a view at the end and removing
+     * views that fall off as necessary.
+     *
+     * @param amount The amount (positive or negative) to scroll.
+     */
+	private void scrollListItemBy(int amount) {
+		offsetChildrenLeftAndRight(amount);
+		final int listRight = getWidth();
+		final int listLeft = 0;
+		final HListView.RecycleBin recycleBin = mRecycler;
+		
+		if(amount < 0) {
+			int numChildren = getChildCount();
+			View last = getChildAt(numChildren -1);
+			while(last.getRight()<listRight) {
+				final int lastVisiblePosition = mFirstPosition + numChildren - 1;
+				if(lastVisiblePosition < getCount() - 1) {
+					last = addViewAfter(last, lastVisiblePosition);
+					numChildren++;
+				} else {
+					break;
+				}
+			}
+			// may have brought in the last child of the list that is skinnier
+            // than the fading edge, thereby leaving space at the end.  need
+            // to shift back
+			if(last.getRight() < listRight) {
+				offsetChildrenLeftAndRight(listRight - last.getRight());
+			}
+			
+			// top views may be panned off screen
+			View first = getChildAt(0);
+			while(first.getLeft() < listLeft) {
+				detachViewFromParent(first);
+				recycleBin.addScrapView(first, mFirstPosition);
+				first = getChildAt(0);
+                mFirstPosition++;
+			}
+		} else {
+			//shift first items down
+			View first = getChildAt(0);
+			while((first.getLeft() > listLeft) && (mFirstPosition > 0 )) {
+				first = AddViewBefore(first, mFirstPosition);
+				mFirstPosition--;
+			}
+			
+			// may have brought the very first child of the list in too far and
+            // need to shift it back
+            if (first.getLeft() > listLeft) {
+            	offsetChildrenLeftAndRight(listLeft - first.getLeft());
+            }
+            
+            int lastIndex = getChildCount() - 1;
+            View last = getChildAt(lastIndex);
+            
+            // right view may be panned off screen
+            while(last.getLeft() > listRight) {
+            	detachViewFromParent(last);
+            	recycleBin.addScrapView(last, mFirstPosition + lastIndex);
+            	last = getChildAt(--lastIndex);
+            }
+		}
+	}
+	
+	private View AddViewBefore(View theView, int position) {
+		int beforePosition = position + 1;
+		View child = obtainView(beforePosition, mIsScrap);
+		int edgeOfNewChild = theView.getLeft();
+		setupChild(child, beforePosition, edgeOfNewChild, false, 0, false, mIsScrap[0]);
+		return child;
+	}
+	
+	private View addViewAfter(View theView, int position) {
+		int afterPosition = position + 1;
+		View child = obtainView(afterPosition, mIsScrap);
+		int edgeOfNewChild = theView.getRight();
+		setupChild(child, afterPosition, edgeOfNewChild, true, 0, false, mIsScrap[0]);
+		return child;
+	}
+	
+	/**
+     * Offset the vertical location of all children of this view by the specified number of pixels.
+     *
+     * @param offset the number of pixels to offset
+     *
+     */
+    public void offsetChildrenLeftAndRight(int offset) {
+        final int count = getChildCount();
+        for (int i = 0; i < count; i++) {
+            final View v = getChildAt(i);
+            v.offsetLeftAndRight(offset);
+        }
+    }
+    
 	@Override
 	public void requestLayout() {
 		if(!mInLayout) {
@@ -359,5 +505,101 @@ public class HListView extends AdapterView<ListAdapter> {
 		}
 	}
 	
+	protected View obtainView(int position, boolean[] isScrap) {
+		isScrap[0] = false;
+		View scrapView;
+		scrapView = mRecycler.getScrapView(position);
+		View child;
+		
+		if(scrapView!=null) {
+            child = mAdapter.getView(position, scrapView, this);
+            if(child!=scrapView) {
+            	mRecycler.addScrapView(scrapView, position);
+            } else {
+            	isScrap[0] = true;
+            	child.onStartTemporaryDetach();
+            }
+		} else {
+			child = mAdapter.getView(position, null, this);
+		}
+		return child;
+	}
 	
+	private void setupChild(View child, int position, int x, boolean flowRight, int childrenTop, boolean selected, boolean recycled) {
+		final boolean isSelected = selected && shouldShowSelector();
+		final boolean updateChildSelected = isSelected != child.isSelected();
+		final boolean needToMeasure = !recycled || updateChildSelected || child.isLayoutRequested();
+		// Respect layout params that are already in the view. Otherwise make some up...
+        // noinspection unchecked
+		HListView.LayoutParams p = (HListView.LayoutParams) child.getLayoutParams();
+		if(p==null) {
+			p = new HListView.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.MATCH_PARENT);
+		}
+		if(recycled) {
+			attachViewToParent(child, flowRight?-1:0, p);
+		} else {
+			addViewInLayout(child, flowRight?-1:0, p);
+		}
+		
+		if (updateChildSelected) {
+            child.setSelected(isSelected);
+        }
+		
+		if(needToMeasure) {
+			int childHeightSpec = ViewGroup.getChildMeasureSpec(mHeightMeasureSpec, 0, p.height);
+			int lpWidth = p.width;
+			int childWidthSpec;
+			if(lpWidth > 0) {
+				childWidthSpec = MeasureSpec.makeMeasureSpec(lpWidth, MeasureSpec.EXACTLY);
+			} else {
+				childWidthSpec = MeasureSpec.makeMeasureSpec(0, MeasureSpec.UNSPECIFIED);
+			}
+			child.measure(childWidthSpec, childHeightSpec);
+		} else {
+			cleanupLayoutState(child);
+		}
+		
+		final int w = child.getMeasuredWidth();
+        final int h = child.getMeasuredHeight();
+        final int childLeft = flowRight?x:x-w;
+        if(needToMeasure) {
+        	final int childRight = childLeft + w;
+        	final int childBottom = childrenTop + h;
+        	child.layout(childLeft, childrenTop, childRight, childBottom);
+        } else {
+        	child.offsetLeftAndRight(childLeft - child.getLeft());
+        	child.offsetTopAndBottom(childrenTop - child.getTop());
+        }
+	}
+	
+	class RecycleBin {
+		private ArrayList<View> mScrapViews;
+		
+		public void addScrapView(View scrap, int position) {
+			HListView.LayoutParams lp = (HListView.LayoutParams) scrap.getLayoutParams();
+
+			lp.scrappedFromPosition = position;
+			scrap.onStartTemporaryDetach();
+			mScrapViews.add(scrap);
+		}
+		
+		public View getScrapView(int position) {
+			if(mScrapViews.size() > 0) {
+				for(int i=0; i<mScrapViews.size();i++) {
+					View view = mScrapViews.get(i);
+					if(((HListView.LayoutParams)view.getLayoutParams()).scrappedFromPosition == position) {
+						mScrapViews.remove(i);
+						return view;
+					}
+				}
+				return mScrapViews.remove(mScrapViews.size() -1 );
+			} else {
+				return null;
+			}
+		}
+		
+		public void clear(){
+			
+		}
+	}
 }
