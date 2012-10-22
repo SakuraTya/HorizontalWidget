@@ -11,7 +11,6 @@ import android.util.AttributeSet;
 import android.view.KeyEvent;
 import android.view.View;
 import android.view.ViewGroup;
-import android.widget.AbsListView;
 import android.widget.AdapterView;
 import android.widget.ListAdapter;
 
@@ -63,6 +62,8 @@ public class HListView extends AdapterView<ListAdapter> {
 	protected boolean mInLayout;
 
 	private int mSelectedPosition;
+	
+	private int mNextSelectedPosition;
 	private int mFirstPosition;
 
 	protected ListAdapter mAdapter;
@@ -298,12 +299,36 @@ public class HListView extends AdapterView<ListAdapter> {
             View newSel = null;
             
             View focusLayoutRestoreView = null;
-            
+            																																																																																															
             switch(mLayoutMode) {
             case LAYOUT_MOVE_SELECTION:
             default:
             	index = mSelectedPosition - mFirstPosition;
+            	if(index>0 && index < getChildCount()) {
+            		oldSel = getChildAt(index);
+            	}
+            	// Remember the previous first child
+            	oldFirst = getChildAt(0);
+            	if(mNextSelectedPosition >= 0) {
+            		delta = mNextSelectedPosition - mSelectedPosition;
+            	}
+            	// Caution: newSel might be null
+                newSel = getChildAt(index + delta);
             }
+            boolean dataChanged = mDataChanged;
+            if (dataChanged) {
+//                handleDataChanged();
+            }
+            
+            if(mAdapter.getCount()==0) {
+            	resetList();
+//            	invokeOnItemScrollListener();
+                return;
+            }
+            setSelectedPositionInt(mNextSelectedPosition);
+            
+            
+            
 		} finally {
 			mInLayout = false;
 		}
@@ -425,6 +450,10 @@ public class HListView extends AdapterView<ListAdapter> {
 	
 	private void setSelectedPositionInt(int position) {
 		mSelectedPosition = position;
+	}
+	
+	private void setNextSelectedPositionInt(int position) {
+		mNextSelectedPosition = position;
 	}
 
 	private int lookForSelectablePositionOnScreen(int direction) {
@@ -863,6 +892,7 @@ public class HListView extends AdapterView<ListAdapter> {
 		mDataChanged = false;
 		setSelectedPositionInt(INVALID_POSITION);
 		mSelectedPosition = INVALID_POSITION;
+		mNextSelectedPosition = INVALID_POSITION;
 		mSelectedLeft = 0;
 		mSelectRect.setEmpty();
 		invalidate();
