@@ -127,7 +127,13 @@ public class HListView extends AdapterView<ListAdapter> {
     
     private AdapterDataSetObserver mDataSetObserver;
     
-    private int mLayoutMode;
+    /**
+     * This view's padding
+     */
+    protected Rect mListPadding = new Rect();
+    
+    protected int mLayoutMode;
+    
 	public HListView(Context context, AttributeSet attrs, int defStyle) {
 		super(context, attrs, defStyle);
 	}
@@ -208,7 +214,16 @@ public class HListView extends AdapterView<ListAdapter> {
 			final View child = obtainView(0, mIsScrap);
 			measureScrapChild(child, 0, heightMeasureSpec);
 			childWidth = child.getMeasuredWidth();
+			childHeight = child.getMeasuredHeight();
 			mRecycler.addScrapView(child, -1);
+		}
+		
+		if(heightMode == MeasureSpec.UNSPECIFIED) {
+			heightSize = mListPadding.top + mListPadding.bottom + childHeight;
+		}
+		
+		if(widthMode == MeasureSpec.UNSPECIFIED) {
+			widthSize = mListPadding.left + mListPadding.right + getHorizontalFadingEdgeLength() * 2;
 		}
 		
 		if(widthMode == MeasureSpec.AT_MOST) {
@@ -222,7 +237,7 @@ public class HListView extends AdapterView<ListAdapter> {
 			p = new HListView.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.MATCH_PARENT);
 			child.setLayoutParams(p);
 		}
-		int childHeightSpec = ViewGroup.getChildMeasureSpec(heightMeasureSpec, 0, p.height);
+		int childHeightSpec = ViewGroup.getChildMeasureSpec(heightMeasureSpec, mListPadding.top + mListPadding.bottom, p.height);
 		int lpWidth = p.width;
 		int childWidthSpec;
 		if(lpWidth > 0) {
@@ -236,9 +251,9 @@ public class HListView extends AdapterView<ListAdapter> {
 	private final int measureWidthOfChildren(int heightMeasureSpec, int startPosition, int endPosition, final int maxWidth, int disallowPartialChildPosition) {
 		final ListAdapter adapter = mAdapter;
 		if(adapter==null) {
-			return 0;
+			return mListPadding.left + mListPadding.right;
 		}
-		int returnedWidth = 0;
+		int returnedWidth = mListPadding.left + mListPadding.right;
 		// The previous height value that was less than maxHeight and contained
 		// no partial children
         int prevHeightWithoutPartialChild = 0;
@@ -266,10 +281,16 @@ public class HListView extends AdapterView<ListAdapter> {
         }
         return returnedWidth;
 	}
+	
 	@Override
 	protected void onLayout(boolean changed, int left, int top, int right,
 			int bottom) {
 		super.onLayout(changed, left, top, right, bottom);
+		final Rect listPadding = mListPadding;
+		listPadding.left = mSelectionLeftPadding + getPaddingLeft();
+		listPadding.right = mSelectionRightPadding + getPaddingRight();
+		listPadding.top = mSelectionTopPadding + getPaddingTop();
+		listPadding.bottom = mSelectionBottomPadding + getPaddingBottom();
 		layoutChildren();
 	}
 
@@ -286,8 +307,8 @@ public class HListView extends AdapterView<ListAdapter> {
 				resetList();
 				return;
 			}
-			int childrenLeft = 0;
-			int childrenRight = getRight();
+			int childrenLeft = mListPadding.left;
+			int childrenRight = getRight() - getLeft() - mListPadding.right;
 			
 			int childrenCount = getChildCount();
 			int index = 0;
@@ -327,11 +348,246 @@ public class HListView extends AdapterView<ListAdapter> {
             }
             setSelectedPositionInt(mNextSelectedPosition);
             
+            // Pull all children into the RecycleBin.
+            // These views will be reused if possible
+            final int firstPosition = mFirstPosition;
+            final RecycleBin recycleBin = mRecycler;
+            
+            // Don't put header or footer views into the Recycler. Those are
+            // already cached in mHeaderViews;
+            if (dataChanged) {
+                for (int i = 0; i < childrenCount; i++) {
+                    recycleBin.addScrapView(getChildAt(i), firstPosition+i);
+                }
+            } else {
+                recycleBin.fillActiveViews(childrenCount, firstPosition);
+            }
+            
+            // Clear out old views
+            detachAllViewsFromParent();
+            
+            switch(mLayoutMode) {
+            case LAYOUT_MOVE_SELECTION:
+//            	sel = moveSelection(oldSel, newSel, delta, childrenTop, childrenBottom);
+                break;
+            default:
+            	if(childrenCount==0) {
+            		final int position = lookForSelectablePosition(0);
+                    setSelectedPositionInt(position);
+                    sel = fillFromLeft(childrenLeft);
+            	} else {
+            		if (mSelectedPosition >= 0 && mSelectedPosition < mAdapter.getCount()) {
+                        sel = fillSpecific(mSelectedPosition,
+                                oldSel == null ? childrenLeft : oldSel.getTop());
+                    } else if (mFirstPosition < mAdapter.getCount()) {
+                        sel = fillSpecific(mFirstPosition,
+                                oldFirst == null ? childrenLeft : oldFirst.getTop());
+                    } else {
+                        sel = fillSpecific(0, childrenLeft);
+                    }
+            	}
+            }
+            
+            // Flush any cached views that did not get reused above
+            recycleBin.scrapActiveViews();
             
             
 		} finally {
 			mInLayout = false;
 		}
+	}
+	
+	/**
+     * Make sure views are touching the left or right edge, as appropriate for
+     * our gravity
+     */
+    private void adjustViewsLeftOrRight() {
+    	final int childCount = getChildCount();
+    	int delta;
+    	
+    	if(childCount > 0) {
+    		View child;
+    		// Uh-oh -- we came up short. Slide all views up to make them
+            // align with the top
+            child = getChildAt(0);
+            delta = child.getLeft() - mListPadding.left;
+            if (delta < 0) {
+                // We only are looking to see if we are too low, not too high
+                delta = 0;
+            }
+            if (delta != 0) {
+                offsetChildrenLeftAndRight(-delta);
+            }
+    	}
+    }
+    
+    /**
+     * Check if we have dragged the bottom of the list too Left (we have pushed the
+     * top element off the top of the screen when we did not need to). Correct by sliding
+     * everything back down.
+     *
+     * @param childCount Number of children
+     */
+    private void correctTooLeft(int childCount) {
+    	// First see if the last item is visible. If it is not, it is OK for the
+        // top of the list to be pushed up.
+    	int lastPosition = mFirstPosition + childCount - 1;
+    	if(lastPosition == mAdapter.getCount() - 1 && childCount > 0) {
+    		// Get last child
+    		View lastChild = getChildAt(childCount -1);
+    		
+    		// Get the right edge of last child
+    		final int lastRight = lastChild.getRight();
+    		
+    		// This is right end of our draw area
+    		final int end = (getRight() - getLeft()) - mListPadding.right;
+    		
+    		// This is how far we should draw right edge of the last child from the right edge of draw area
+    		int rightOffset = end - lastRight;
+    		
+    		View first = getChildAt(0);
+    		final int firstLeft = first.getLeft();
+    		
+    		// Make sure we are 1) Too left, and 2) Either there are more rows above the
+            // first row or the first row is scrolled off the top of the drawable area
+    		if(rightOffset > 0 && (mFirstPosition > 0 || firstLeft < mListPadding.left)) {
+    			if(mFirstPosition ==0) {
+    				// Don't pull the top too far down
+    				rightOffset = Math.min(rightOffset, mListPadding.top - firstLeft);
+    			}
+    			// Move everything down
+				offsetChildrenLeftAndRight(rightOffset);
+				
+				if(mFirstPosition > 0) {
+					// Fill gap that was opened before mFirstPosition with more columns, if possible.
+					fillLeft(mFirstPosition, firstLeft);
+					// Close up the remaining gap
+					adjustViewsLeftOrRight();
+				}
+    		}
+    	}
+    }
+	/**
+     * Put a specific item at a specific location on the screen and then build
+     * up and down from there.
+     *
+     * @param position The reference view to use as the starting point
+     * @param left Pixel offset from the left of this view to the left of the
+     *        reference view.
+     *
+     * @return The selected view, or null if the selected view is outside the
+     *         visible area.
+     */
+	private View fillSpecific(int position, int left) {
+		boolean tempIsSelected = position == mSelectedPosition;
+		View temp = makeAndAddView(position, left, true, mListPadding.top, tempIsSelected);
+		 // Possibly changed again in fillLeft if we add rows before this one.
+        mFirstPosition = position;
+        
+        View before;
+        View after;
+        
+        before = fillLeft(position-1, temp.getLeft());
+        // This will correct for the top of the first view not touching the top of the list
+        adjustViewsLeftOrRight();
+        after = fillRight(position+1, temp.getRight());
+        int childCount = getChildCount();
+        if(childCount > 0) {
+        	correctTooLeft(childCount);
+        }
+        
+        if(tempIsSelected) {
+        	return temp;
+        } else if(before != null) {
+        	return before;
+        } else {
+        	return after;
+        }
+	}
+	
+	/**
+     * Obtain the view and add it to our list of children. The view can be made
+     * fresh, converted from an unused view, or used as is if it was in the
+     * recycle bin.
+     *
+     * @param position Logical position in the list
+     * @param x Left or right edge of the view to add
+     * @param flow If flow is true, align left edge to x If false, align right
+     *        edge to x.
+     * @param childrenTop Top edge where children should be positioned
+     * @param selected Is this position selected?
+     * @return View that was added
+     */
+	private View makeAndAddView(int position, int x, boolean flow, int childrenTop,
+            boolean selected) {
+        View child;
+
+
+        if (!mDataChanged) {
+            // Try to use an exsiting view for this position
+            child = mRecycler.getActiveView(position);
+            if (child != null) {
+
+                // Found it -- we're using an existing child
+                // This just needs to be positioned
+                setupChild(child, position, x, flow, childrenTop, selected, true);
+
+                return child;
+            }
+        }
+
+        // Make a new view for this position, or convert an unused view if possible
+        child = obtainView(position, mIsScrap);
+
+        // This needs to be positioned and measured
+        setupChild(child, position, x, flow, childrenTop, selected, mIsScrap[0]);
+
+        return child;
+    }
+	
+	private View fillFromLeft(int nextLeft) {
+		mFirstPosition = Math.min(mFirstPosition, mSelectedPosition);
+		mFirstPosition = Math.min(mFirstPosition, mAdapter.getCount() - 1);
+		if (mFirstPosition < 0) {
+            mFirstPosition = 0;
+        }
+		return fillRight(mFirstPosition, nextLeft);
+	}
+	
+	/**
+     * Fills the list from pos down to the end of the list view.
+     *
+     * @param pos The first position to put in the list
+     *
+     * @param nextLeft The location where the left of the item associated with pos
+     *        should be drawn
+     *
+     * @return The view that is currently selected, if it happens to be in the
+     *         range that we draw.
+     */
+	private View fillRight(int pos, int nextLeft) {
+		View selectedView = null;
+		
+		int end = getRight() - getLeft();
+		
+		while(nextLeft < end && pos > mAdapter.getCount()) {
+			boolean selected = pos == mSelectedPosition;
+			View child = makeAndAddView(pos, nextLeft, true, 0, selected);
+			
+			nextLeft = child.getRight();
+			
+			if(selected) {
+				selectedView = child;
+			}
+			pos++;
+		}
+		return selectedView;
+	}
+	
+	private View fillLeft(int pos, int nextLeft) {
+		View selectedView = null;
+		int end = 0;
+		return null;
 	}
 	
 	private int lookForSelectablePosition(int position) {
@@ -494,8 +750,8 @@ public class HListView extends AdapterView<ListAdapter> {
 	}
 
 	private int amountToScroll(int direction, int nextSelectedPosition) {
-		final int listLeft = 0;
-		final int listRight = getWidth();
+		final int listLeft = mListPadding.left;
+		final int listRight = getWidth() - mListPadding.right;
 		
 		final int numChildren = getChildCount();
 		if(direction == FOCUS_RIGHT) {
@@ -625,8 +881,8 @@ public class HListView extends AdapterView<ListAdapter> {
      */
 	private void scrollListItemBy(int amount) {
 		offsetChildrenLeftAndRight(amount);
-		final int listRight = getWidth();
-		final int listLeft = 0;
+		final int listRight = getWidth() - mListPadding.right;
+		final int listLeft = mListPadding.left;
 		final HListView.RecycleBin recycleBin = mRecycler;
 		
 		if(amount < 0) {
@@ -686,7 +942,7 @@ public class HListView extends AdapterView<ListAdapter> {
 		int beforePosition = position + 1;
 		View child = obtainView(beforePosition, mIsScrap);
 		int edgeOfNewChild = theView.getLeft();
-		setupChild(child, beforePosition, edgeOfNewChild, false, 0, false, mIsScrap[0]);
+		setupChild(child, beforePosition, edgeOfNewChild, false, mListPadding.top, false, mIsScrap[0]);
 		return child;
 	}
 	
@@ -694,7 +950,7 @@ public class HListView extends AdapterView<ListAdapter> {
 		int afterPosition = position + 1;
 		View child = obtainView(afterPosition, mIsScrap);
 		int edgeOfNewChild = theView.getRight();
-		setupChild(child, afterPosition, edgeOfNewChild, true, 0, false, mIsScrap[0]);
+		setupChild(child, afterPosition, edgeOfNewChild, true, mListPadding.top, false, mIsScrap[0]);
 		return child;
 	}
 	
@@ -751,7 +1007,7 @@ public class HListView extends AdapterView<ListAdapter> {
 		}
 		if(recycled) {
 			attachViewToParent(child, flowRight?-1:0, p);
-		} else {
+		} else {   
 			addViewInLayout(child, flowRight?-1:0, p);
 		}
 		
@@ -760,7 +1016,7 @@ public class HListView extends AdapterView<ListAdapter> {
         }
 		
 		if(needToMeasure) {
-			int childHeightSpec = ViewGroup.getChildMeasureSpec(mHeightMeasureSpec, 0, p.height);
+			int childHeightSpec = ViewGroup.getChildMeasureSpec(mHeightMeasureSpec, mListPadding.top + mListPadding.bottom, p.height);
 			int lpWidth = p.width;
 			int childWidthSpec;
 			if(lpWidth > 0) {
@@ -834,7 +1090,64 @@ public class HListView extends AdapterView<ListAdapter> {
 	
 	
 	class RecycleBin {
+		
+		private int mFirstActivePosition;
+		private View[] mActiveViews = new View[0];
 		private ArrayList<View> mScrapViews = new ArrayList<View>();
+		
+		public void fillActiveViews(int childCount, int firstActivePosition) {
+			if(mActiveViews.length< childCount) {
+				mActiveViews = new View[childCount];
+			}
+			mFirstActivePosition = firstActivePosition;
+			
+			final View[] activeViews = mActiveViews;
+			for(int i=0; i<childCount; i++) {
+				View child = getChildAt(i);
+				activeViews[i] = child;
+			}
+		}
+		
+		public void scrapActiveViews() {
+			final View[] activeViews = mActiveViews;
+			final ArrayList<View> scrapViews = mScrapViews;
+			final int count = mActiveViews.length;
+			for(int i=count-1; i>=0; --i) {
+				final View victim = activeViews[i];
+				if(victim != null) {
+					activeViews[i] = null;
+					victim.onStartTemporaryDetach();
+					scrapViews.add(victim);
+				}
+			}
+			prunceScrapViews();
+		}
+		
+		/**
+         * Makes sure that the size of mScrapViews does not exceed the size of mActiveViews.
+         * (This can happen if an adapter does not recycle its views).
+         */
+		private void prunceScrapViews() {
+			final int maxViewCount = mActiveViews.length;
+			final ArrayList<View> scrapViews = mScrapViews;
+			int size = scrapViews.size();
+			final int extras = maxViewCount - size;
+			size--;
+			for(int i=0; i<extras; i++) {
+				removeDetachedView(scrapViews.remove(i--), false);
+			}
+		}
+		
+		public View getActiveView(int position) {
+			int index = position - mFirstActivePosition;
+			final View[] activeViews = mActiveViews;
+			if(index>0 && index<activeViews.length) {
+				final View match = activeViews[index];
+				activeViews[index] = null;
+				return match;
+			}
+			return null;
+		}
 		
 		public void addScrapView(View scrap, int position) {
 			HListView.LayoutParams lp = (HListView.LayoutParams) scrap.getLayoutParams();
