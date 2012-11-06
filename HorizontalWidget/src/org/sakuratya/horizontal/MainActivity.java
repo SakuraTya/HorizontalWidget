@@ -7,6 +7,8 @@ import org.sakuratya.horizontal.ui.HListView;
 
 import android.os.Bundle;
 import android.app.Activity;
+import android.graphics.drawable.ColorDrawable;
+import android.graphics.drawable.ShapeDrawable;
 import android.view.Menu;
 
 public class MainActivity extends Activity {
@@ -27,6 +29,9 @@ public class MainActivity extends Activity {
         }
         HAdapter adapter = new HAdapter(this, testList);
         mHListView.setAdapter(adapter);
+        mHListView.setFocusable(true);
+        ColorDrawable c = new ColorDrawable(0xffff0000);
+        mHListView.setSelector(c);
     }
 
 	

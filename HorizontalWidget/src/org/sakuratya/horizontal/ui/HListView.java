@@ -8,6 +8,7 @@ import android.graphics.Canvas;
 import android.graphics.Rect;
 import android.graphics.drawable.Drawable;
 import android.util.AttributeSet;
+import android.util.Log;
 import android.view.KeyEvent;
 import android.view.View;
 import android.view.ViewGroup;
@@ -15,6 +16,7 @@ import android.widget.AdapterView;
 import android.widget.ListAdapter;
 
 public class HListView extends AdapterView<ListAdapter> {
+	private static final String TAG = "HListView";
 	/**
      * Used to indicate a no preference for a position type.
      */
@@ -59,7 +61,7 @@ public class HListView extends AdapterView<ListAdapter> {
 	
 	protected boolean mDataChanged;
 	
-	protected boolean mInLayout;
+	protected boolean mInLayout = false;
 
 	private int mSelectedPosition;
 	
@@ -80,6 +82,7 @@ public class HListView extends AdapterView<ListAdapter> {
      * times the height of the list.
      */
     private static final float MAX_SCROLL_FACTOR = 0.33f;
+
     
     private Rect mSelectRect = new Rect();
     
@@ -174,6 +177,7 @@ public class HListView extends AdapterView<ListAdapter> {
 		if(mAdapter!=null && mDataSetObserver!=null) {
 			mAdapter.unregisterDataSetObserver(mDataSetObserver);
 		}
+		mAdapter = adapter;
 		resetList();
 		mRecycler.clear();
 		if(mAdapter!=null) {
@@ -186,8 +190,8 @@ public class HListView extends AdapterView<ListAdapter> {
 
 	@Override
 	public View getSelectedView() {
-		if(mAdapter.getCount() > 0 && mSelectedPosition > 0) {
-			return getChildAt(mSelectedPosition);
+		if(mAdapter.getCount() > 0 && mSelectedPosition >= 0) {
+			return getChildAt(mSelectedPosition - mFirstPosition);
 		} else {
 			return null;
 		}
@@ -391,6 +395,9 @@ public class HListView extends AdapterView<ListAdapter> {
             // Flush any cached views that did not get reused above
             recycleBin.scrapActiveViews();
             
+            mLayoutMode = LAYOUT_NORMAL;
+            mDataChanged = false;
+            setNextSelectedPositionInt(mSelectedPosition);
             
 		} finally {
 			mInLayout = false;
@@ -570,7 +577,7 @@ public class HListView extends AdapterView<ListAdapter> {
 		
 		int end = getRight() - getLeft();
 		
-		while(nextLeft < end && pos > mAdapter.getCount()) {
+		while(nextLeft < end && pos < mAdapter.getCount()) {
 			boolean selected = pos == mSelectedPosition;
 			View child = makeAndAddView(pos, nextLeft, true, 0, selected);
 			
@@ -621,7 +628,7 @@ public class HListView extends AdapterView<ListAdapter> {
 		boolean handled = false;
         int action = event.getAction();
         if(action != KeyEvent.ACTION_UP) {
-        	switch(action) {
+        	switch(keyCode) {
             case KeyEvent.KEYCODE_DPAD_LEFT:
             	if(!handled) {
             		handled = arrowScroll(FOCUS_LEFT);
@@ -740,7 +747,7 @@ public class HListView extends AdapterView<ListAdapter> {
 				startPos = lastPos;
 			}
 			final ListAdapter adapter = getAdapter();
-			for(int pos = startPos; pos <= firstPosition; pos--) {
+			for(int pos = startPos; pos >= firstPosition; pos--) {
 				if(adapter.isEnabled(pos) && getChildAt(pos - firstPosition).getVisibility() == View.VISIBLE) {
 					return pos;
 				}
@@ -832,10 +839,11 @@ public class HListView extends AdapterView<ListAdapter> {
     	}
     	final Rect selectRect = mSelectRect;
     	selectRect.set(sel.getLeft(), sel.getTop(), sel.getRight(), sel.getBottom());
+    	positionSelector(selectRect.left, selectRect.top, selectRect.right, selectRect.bottom);
     	final boolean isChildViewEnabled = mIsChildViewEnabled;
     	if(sel.isEnabled()!= isChildViewEnabled ) {
     		mIsChildViewEnabled = !isChildViewEnabled;
-    		if(getSelectedItemPosition() != INVALID_POSITION) {
+    		if(mNextSelectedPosition != INVALID_POSITION) {
     			refreshDrawableState();
     		}
     	}
@@ -1131,10 +1139,10 @@ public class HListView extends AdapterView<ListAdapter> {
 			final int maxViewCount = mActiveViews.length;
 			final ArrayList<View> scrapViews = mScrapViews;
 			int size = scrapViews.size();
-			final int extras = maxViewCount - size;
+			final int extras = size - maxViewCount;
 			size--;
 			for(int i=0; i<extras; i++) {
-				removeDetachedView(scrapViews.remove(i--), false);
+				removeDetachedView(scrapViews.remove(size--), false);
 			}
 		}
 		
@@ -1209,5 +1217,6 @@ public class HListView extends AdapterView<ListAdapter> {
 		mSelectedLeft = 0;
 		mSelectRect.setEmpty();
 		invalidate();
+		mLayoutMode = LAYOUT_NORMAL;
 	}
 }
