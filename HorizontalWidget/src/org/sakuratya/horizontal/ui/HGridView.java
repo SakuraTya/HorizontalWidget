@@ -125,20 +125,17 @@ public class HGridView extends AdapterView<HGridAdapter> {
 	
 	@Override
 	public boolean onKeyDown(int keyCode, KeyEvent event) {
-		// TODO Auto-generated method stub
-		return super.onKeyDown(keyCode, event);
+		return commonKey(keyCode, 1, event);
 	}
 
 	@Override
 	public boolean onKeyUp(int keyCode, KeyEvent event) {
-		// TODO Auto-generated method stub
-		return super.onKeyUp(keyCode, event);
+		return commonKey(keyCode, 1, event);
 	}
 
 	@Override
 	public boolean onKeyMultiple(int keyCode, int repeatCount, KeyEvent event) {
-		// TODO Auto-generated method stub
-		return super.onKeyMultiple(keyCode, repeatCount, event);
+		return commonKey(keyCode, repeatCount, event);
 	}
 	
 	private boolean commonKey(int keyCode, int repeatCount, KeyEvent event) {
