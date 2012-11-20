@@ -6,10 +6,15 @@ import android.widget.BaseAdapter;
 
 public abstract class HGridAdapter<E> extends BaseAdapter {
 	
-	private SparseArray<E> mList;
+	protected SparseArray<E> mList;
 	
 	public abstract int getSectionIndex(int position);
 	
+	/**
+	 * Return the section count excluded separator specified by the position.
+	 * @param position is the section's index in {@link HGridAdapter#mList}
+	 * @return the section count excluded separator.
+	 */
 	public abstract int getSectionCount(int position);
 
 	public boolean hasSection() {

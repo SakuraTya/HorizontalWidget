@@ -6,7 +6,9 @@ import org.sakuratya.horizontal.adapter.HGridAdapter;
 
 import android.content.Context;
 import android.database.DataSetObserver;
+import android.graphics.Canvas;
 import android.graphics.Rect;
+import android.graphics.drawable.Drawable;
 import android.util.AttributeSet;
 import android.util.FloatMath;
 import android.view.KeyEvent;
@@ -40,6 +42,7 @@ public class HGridView extends AdapterView<HGridAdapter> {
     private static final int LAYOUT_SET_SELECTION = 0;
     private static final int LAYOUT_NORMAL = 1;
     private static final int LAYOUT_MOVE_SELECTION = 2;
+    private static final int LAYOUT_SPECIFIC = 3;
     
 	private HGridAdapter mAdapter;
 	
@@ -47,6 +50,13 @@ public class HGridView extends AdapterView<HGridAdapter> {
 	private int mSelectedPosition;
 	private int mNextSelectedPosition;
 	
+	private int mResurrectToPosition;
+	/**
+     * The offset in pixels form the top of the AdapterView to the top
+     * of the currently selected view. Used to save and restore state.
+     */
+    private int mSelectedTop = 0;
+    
 	private int mAmountToScroll = 0;
 	/**
 	 * Set rows per column.
@@ -61,10 +71,10 @@ public class HGridView extends AdapterView<HGridAdapter> {
 	
 	private Rect mListPadding;
 	
-	private int mSelectorLeftPadding;
-	private int mSelectorTopPadding;
-	private int mSelectorRightPadding;
-	private int mSelectorBottomPadding;
+	private int mSelectionLeftPadding;
+	private int mSelectionTopPadding;
+	private int mSelectionRightPadding;
+	private int mSelectionBottomPadding;
 	
 	private boolean isInLayout = false;
 	
@@ -97,6 +107,12 @@ public class HGridView extends AdapterView<HGridAdapter> {
     final boolean[] mIsScrap = new boolean[1];
     
     protected AdapterDataSetObserver mDataSetObserver;
+    
+    private Rect mSelectorRect;
+    /**
+     * The drawable used to draw the selector
+     */
+    Drawable mSelector;
     
 	public HGridView(Context context, AttributeSet attrs, int defStyle) {
 		super(context, attrs, defStyle);
@@ -132,7 +148,7 @@ public class HGridView extends AdapterView<HGridAdapter> {
 			mDataChanged = true;
 			mDataSetObserver = new AdapterDataSetObserver();
 			mAdapter.registerDataSetObserver(mDataSetObserver);
-			
+			mMaxColumn = getColumn(mAdapter.getCount() - 1);
 			int position = lookForSelectablePosition(0, true);
 			setSelectedPositionInt(position);
 			setNextSelectedPositionInt(position);
@@ -393,9 +409,9 @@ public class HGridView extends AdapterView<HGridAdapter> {
 		boolean isSelected = selected && shouldShowSelector();
 		boolean updateChildSelected = isSelected == child.isSelected();
 		boolean needToMeasure = !recycled || updateChildSelected || child.isLayoutRequested();
-		LayoutParams p = (LayoutParams) child.getLayoutParams();
+		HGridView.LayoutParams p = (HGridView.LayoutParams) child.getLayoutParams();
 		if(p == null) {
-			p = new LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.MATCH_PARENT);
+			p = new HGridView.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.MATCH_PARENT);
 		}
 		
 		if(recycled) {
@@ -539,20 +555,38 @@ public class HGridView extends AdapterView<HGridAdapter> {
 					}
 				}
 			}
+			
+			recycleBin.scrapActiveViews();
+			
+			if(sel!=null) {
+				positionSelector(sel);
+			}
 		} finally {
 			isInLayout = false;
 			mAmountToScroll = 0;
 		}
 	}
+	
+	protected void positionSelector(View sel) {
+		final Rect selectorRect = mSelectorRect;
+		selectorRect.set(sel.getLeft(), sel.getTop(), sel.getRight(), sel.getBottom());
+		positionSelector(selectorRect.left, selectorRect.top, selectorRect.right, selectorRect.bottom);
+		refreshDrawableState();
+	}
+	
+	private void positionSelector(int l, int t, int r, int b) {
+        mSelectorRect.set(l - mSelectionLeftPadding, t - mSelectionTopPadding, r
+                + mSelectionRightPadding, b + mSelectionBottomPadding);
+    }
 
 	@Override
 	protected void onMeasure(int widthMeasureSpec, int heightMeasureSpec) {
 		
 		final Rect listPadding = mListPadding;
-		listPadding.left = mSelectorLeftPadding + getPaddingLeft();
-		listPadding.top = mSelectorTopPadding + getPaddingTop();
-		listPadding.right = mSelectorRightPadding + getPaddingRight();
-		listPadding.bottom = mSelectorBottomPadding + getPaddingBottom();
+		listPadding.left = mSelectionLeftPadding + getPaddingLeft();
+		listPadding.top = mSelectionTopPadding + getPaddingTop();
+		listPadding.right = mSelectionRightPadding + getPaddingRight();
+		listPadding.bottom = mSelectionBottomPadding + getPaddingBottom();
 	}
 	
 	@Override
@@ -856,10 +890,12 @@ public class HGridView extends AdapterView<HGridAdapter> {
 	}
 	
 	private void resetList() {
+		removeAllViewsInLayout();
+		mDataChanged = false;
 		mSelectedPosition = INVALID_POSITION;
 		mNextSelectedPosition = INVALID_POSITION;
 		mFirstPosition = 0;
-		
+		invalidate();
 	}
 	
 	public void setRowHeight(int height) {
@@ -874,6 +910,80 @@ public class HGridView extends AdapterView<HGridAdapter> {
 		return hasFocus();
 	}
 	
+	@Override
+    public boolean verifyDrawable(Drawable dr) {
+        return mSelector == dr || super.verifyDrawable(dr);
+    }
+	
+	@Override
+	protected void dispatchDraw(Canvas canvas) {
+		drawSelector(canvas);
+		super.dispatchDraw(canvas);
+	}
+	
+	private void drawSelector(Canvas canvas) {
+		if(shouldShowSelector() && mSelector!=null && !mSelectorRect.isEmpty()) {
+			final Drawable selector = mSelector;
+			selector.setBounds(mSelectorRect);
+			selector.draw(canvas);
+		}
+	}
+	
+	@Override
+    public void requestLayout() {
+        if (!isInLayout) {
+            super.requestLayout();
+        }
+    }
+	
+	/**
+     * Set a Drawable that should be used to highlight the currently selected item.
+     *
+     * @param resID A Drawable resource to use as the selection highlight.
+     *
+     * @attr ref android.R.styleable#AbsListView_listSelector
+     */
+    public void setSelector(int resID) {
+        setSelector(getResources().getDrawable(resID));
+    }
+    
+	public void setSelector(Drawable sel) {
+		if(mSelector!=null) {
+			mSelector.setCallback(null);
+		}
+		mSelector = sel;
+        Rect padding = new Rect();
+        sel.getPadding(padding);
+        mSelectionLeftPadding = padding.left;
+        mSelectionTopPadding = padding.top;
+        mSelectionRightPadding = padding.right;
+        mSelectionBottomPadding = padding.bottom;
+        sel.setCallback(this);
+        sel.setState(getDrawableState());
+	}
+
+	@Override
+    protected void drawableStateChanged() {
+        super.drawableStateChanged();
+        if (mSelector != null) {
+            mSelector.setState(getDrawableState());
+        }
+    }
+	
+	void hideSelector() {
+        if (mSelectedPosition != INVALID_POSITION) {
+            if (mLayoutMode != LAYOUT_SPECIFIC) {
+                mResurrectToPosition = mSelectedPosition;
+            }
+            if (mNextSelectedPosition >= 0 && mNextSelectedPosition != mSelectedPosition) {
+                mResurrectToPosition = mNextSelectedPosition;
+            }
+            setSelectedPositionInt(INVALID_POSITION);
+            setNextSelectedPositionInt(INVALID_POSITION);
+            mSelectedTop = 0;
+            mSelectorRect.setEmpty();
+        }
+    }
 	
 	static class LayoutParams extends ViewGroup.LayoutParams {
 
@@ -896,29 +1006,96 @@ public class HGridView extends AdapterView<HGridAdapter> {
 	
 	class RecycleBin {
 		
-		private int firstActivePosition;
+		private int mFirstActivePosition;
 		
-		private ArrayList<View> activeViews;
+		private View[] mActiveViews = new View[0];
 		
 		private ArrayList<View> mScrapViews;
 		
-		private void fillActiveViews(int childCount, int firstPosition) {
+		public void fillActiveViews(int childCount, int firstPosition) {
+			if(mActiveViews.length < childCount) {
+				mActiveViews = new View[childCount];
+			}
+			mFirstActivePosition = firstPosition;
 			
+			final View[] activeViews = mActiveViews;
+			for(int i=0; i<childCount; i++) {
+				View child = getChildAt(i);
+				activeViews[i] = child;
+			}
 		}
 		
-		private View getActiveView(int position) {
+		/**
+         * Move all views remaining in mActiveViews to mScrapViews.
+         */
+		public View getActiveView(int position) {
+			int index = position - mFirstActivePosition;
+			final View[] activeViews = mActiveViews;
+			if(index > 0 && index < activeViews.length) {
+				final View match = activeViews[index];
+				activeViews[index] = null;
+				return match;
+			}
 			return null;
 		}
+		
+		public void scrapActiveViews() {
+			final View[] activeViews = mActiveViews;
+			ArrayList<View> scrapViews = mScrapViews;
+			final int count = activeViews.length;
+			for(int i=count-1;i>=0;i--) {
+				final View victim = activeViews[i];
+				if(victim!=null) {
+					activeViews[i] = null;
+					victim.onStartTemporaryDetach();
+					scrapViews.add(victim);
+				}
+			}
+			pruneScrapViews();
+		}
+		
+		/**
+         * Makes sure that the size of mScrapViews does not exceed the size of mActiveViews.
+         * (This can happen if an adapter does not recycle its views).
+         */
+		private void pruneScrapViews() {
+			final int maxViews = mActiveViews.length;
+			final ArrayList<View> scrapViews = mScrapViews;
+			int size = scrapViews.size();
+			final int extras = size - maxViews;
+			size--;
+			for(int i=0; i< extras; i++) {
+				removeDetachedView(mScrapViews.remove(size--), false);
+			}
+		}
+		
 		public void addScrapView(View scrap) {
+			HGridView.LayoutParams p = (HGridView.LayoutParams) scrap.getLayoutParams();
+			if(p==null) {
+				return;
+			}
+			
+			scrap.onStartTemporaryDetach();
+			mScrapViews.add(scrap);
 			
 		}
 		
 		public View getScrapView(int position) {
-			return null;
+			ArrayList<View> scrapViews = mScrapViews;
+			int size = scrapViews.size();
+			if(size>0) {
+				return scrapViews.remove(size -1);
+			} else {
+				return null;
+			}
 		}
 		
 		public void clear() {
-			
+			final ArrayList<View> scrapView = mScrapViews;
+			final int scrapCount = scrapView.size();
+			for(int i=0; i<scrapCount; i++) {
+				removeViewInLayout(scrapView.remove(scrapCount - 1 - i));
+			}
 		}
 	}
 	
