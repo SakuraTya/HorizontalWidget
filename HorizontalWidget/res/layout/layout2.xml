@@ -1,0 +1,13 @@
+<RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent" >
+    <org.sakuratya.horizontal.HorizontalListView
+        android:id="@+id/h_list_view"
+        android:layout_width="800dip"
+        android:layout_height="600dip"
+        android:layout_alignParentTop="true"
+        android:layout_alignParentLeft="true">
+        
+    </org.sakuratya.horizontal.HorizontalListView>
+</RelativeLayout>

@@ -1,12 +1,13 @@
 package org.sakuratya.horizontal.adapter;
 
 
-import android.util.SparseArray;
+import java.util.ArrayList;
+
 import android.widget.BaseAdapter;
 
 public abstract class HGridAdapter<E> extends BaseAdapter {
 	
-	protected SparseArray<E> mList;
+	protected ArrayList<E> mList;
 	
 	public abstract int getSectionIndex(int position);
 	

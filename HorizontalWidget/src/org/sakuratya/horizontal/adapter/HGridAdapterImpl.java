@@ -3,12 +3,15 @@ package org.sakuratya.horizontal.adapter;
 import java.util.ArrayList;
 import java.util.Arrays;
 
+import org.sakuratya.horizontal.R;
 import org.sakuratya.horizontal.model.ItemList;
 
 import android.content.Context;
 import android.util.SparseArray;
+import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
+import android.widget.TextView;
 
 public class HGridAdapterImpl extends HGridAdapter<ItemList> {
 	
@@ -16,17 +19,22 @@ public class HGridAdapterImpl extends HGridAdapter<ItemList> {
 	
 	private int mSize;
 	
-	private int[] mSectionIndexArray;	
+	private int[] mSectionIndexArray;
+	
+	private SparseArray<String> mTrueArray;
 	
 	public HGridAdapterImpl(Context context, ArrayList<ItemList> list) {
 		mContext = context;
 		if(list != null && list.size()>0) {
 			mSectionIndexArray = new int[list.size()];
-			mList = new SparseArray<ItemList>(list.size());
+			mTrueArray = new SparseArray<String>();
+			mList = list;
 			for(int i=0; i<list.size(); i++) {
 				mSectionIndexArray[i] = mSize;
-				mList.put(i, list.get(i));
-				mSize+=list.get(i).objects.size() + 1;
+				mTrueArray.put(mSize++, "separator");
+				for(int j=0; j < list.get(i).objects.size(); j++) {
+					mTrueArray.put(mSize++, list.get(i).objects.get(j));
+				}
 			}
 		}
 	}
@@ -37,9 +45,8 @@ public class HGridAdapterImpl extends HGridAdapter<ItemList> {
 	}
 
 	@Override
-	public Object getItem(int position) {
-		// TODO Auto-generated method stub
-		return null;
+	public String getItem(int position) {
+		return mTrueArray.get(position);
 	}
 
 	@Override
@@ -50,8 +57,18 @@ public class HGridAdapterImpl extends HGridAdapter<ItemList> {
 
 	@Override
 	public View getView(int position, View convertView, ViewGroup parent) {
-		// TODO Auto-generated method stub
-		return null;
+		Holder holder = null;
+		if(convertView == null) {
+			convertView = LayoutInflater.from(mContext).inflate(R.layout.item_view,null);
+			holder = new Holder();
+			holder.title = (TextView) convertView.findViewById(R.id.item_title);
+			convertView.setTag(holder);
+		} else {
+			holder = (Holder) convertView.getTag();
+		}
+		String text = getItem(position);
+		holder.title.setText(text);
+		return convertView;
 	}
 
 	@Override
@@ -78,6 +95,10 @@ public class HGridAdapterImpl extends HGridAdapter<ItemList> {
 		} else {
 			return true;
 		}
+	}
+	
+	static class Holder {
+		TextView title;
 	}
 
 }

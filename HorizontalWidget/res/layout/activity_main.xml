@@ -1,11 +1,18 @@
-<RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
-    android:layout_height="match_parent" >
-    <org.sakuratya.horizontal.ui.HListView
+    android:layout_height="match_parent"
+    android:orientation="vertical">
+    <org.sakuratya.horizontal.ui.HGridView
         android:id="@+id/h_list_view"
         android:layout_width="match_parent"
-        android:layout_height="match_parent">
+        android:layout_height="600dip"
+        android:layout_alignParentTop="true"
+        android:layout_alignParentLeft="true">
         
-    </org.sakuratya.horizontal.ui.HListView>
-</RelativeLayout>
+    </org.sakuratya.horizontal.ui.HGridView>
+    <TextView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="Hello World"/>
+</LinearLayout>
