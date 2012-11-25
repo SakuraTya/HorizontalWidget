@@ -19,8 +19,6 @@ public class HGridAdapterImpl extends HGridAdapter<ItemList> {
 	
 	private int mSize;
 	
-	private int[] mSectionIndexArray;
-	
 	private SparseArray<String> mTrueArray;
 	
 	public HGridAdapterImpl(Context context, ArrayList<ItemList> list) {
@@ -82,7 +80,7 @@ public class HGridAdapterImpl extends HGridAdapter<ItemList> {
 		}
 		return 0;
 	}
-
+	
 	@Override
 	public int getSectionCount(int position) {
 		return mList.get(position).objects.size();
@@ -91,9 +89,9 @@ public class HGridAdapterImpl extends HGridAdapter<ItemList> {
 	@Override
 	public boolean isEnabled(int position) {
 		if(Arrays.binarySearch(mSectionIndexArray, position)<0) {
-			return false;
-		} else {
 			return true;
+		} else {
+			return false;
 		}
 	}
 	

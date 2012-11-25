@@ -10,11 +10,14 @@ import org.sakuratya.horizontal.ui.HGridView;
 import android.app.Activity;
 import android.graphics.drawable.ColorDrawable;
 import android.os.Bundle;
+import android.util.Log;
 import android.widget.GridView;
 
 public class MainActivity extends Activity {
 
-    private HorizontalListView mHListView;
+    private static final String TAG = "MainActivity";
+
+	private HorizontalListView mHListView;
 
     private ArrayList<String> testList = new ArrayList<String>();
     
@@ -78,8 +81,11 @@ public class MainActivity extends Activity {
         mHGridView.setVerticalSpacing(20);
         mHGridView.setRowHeight(200);
         mHGridView.setRows(3);
-        
+        mHGridView.setSelector(R.drawable.selector);
         mHGridView.setAdapter(adapter);
+        mHGridView.setFocusable(true);
+        Log.d(TAG, "Focusable: " + mHGridView.isFocusable());
+        mHGridView.requestFocus();
 	}
 
 	

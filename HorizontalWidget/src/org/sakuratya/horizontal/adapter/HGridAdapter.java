@@ -8,6 +8,7 @@ import android.widget.BaseAdapter;
 public abstract class HGridAdapter<E> extends BaseAdapter {
 	
 	protected ArrayList<E> mList;
+	protected  int[] mSectionIndexArray;
 	
 	public abstract int getSectionIndex(int position);
 	
@@ -20,5 +21,14 @@ public abstract class HGridAdapter<E> extends BaseAdapter {
 
 	public boolean hasSection() {
 		return mList.size() > 1 ? true:false;
+	}
+	
+	public int getSectionCount() {
+		return mList.size();
+	}
+	
+
+	public int[] getSectionIndexArray() {
+		return mSectionIndexArray;
 	}
 }
