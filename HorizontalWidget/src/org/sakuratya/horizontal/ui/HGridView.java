@@ -757,15 +757,15 @@ public class HGridView extends AdapterView<HGridAdapter> {
 	
 	private int lookForSelectablePositionOnScreen(int direction) {
 		final int firstPosition = mFirstPosition;
-		
+		final int selectedPosition = mSelectedPosition;
 		if(direction== FOCUS_LEFT) {
 			final int lastVisiblePosition = mFirstPosition + getChildCount() - 1;
-			final int currentSelectedColumn = mSelectedPosition==INVALID_POSITION ? getColumn(lastVisiblePosition): getColumn(mSelectedPosition);
+			final int currentSelectedColumn = selectedPosition==INVALID_POSITION ? getColumn(lastVisiblePosition): getColumn(selectedPosition);
 			final int firstColumn = getColumn(firstPosition);
 			if(currentSelectedColumn<=0 && currentSelectedColumn < firstColumn) {
 				return INVALID_POSITION;
 			}
-			final int currentSelectedRow =mSelectedPosition==INVALID_POSITION ? 0 : getRow(mSelectedPosition);
+			final int currentSelectedRow =selectedPosition==INVALID_POSITION ? 0 : getRow(selectedPosition);
 			for(int col=currentSelectedColumn-1; col>=firstColumn;col--) {
 				int[] positionRange = getPositionRangeByColumn(col);
 				// Skip the separator
@@ -777,15 +777,15 @@ public class HGridView extends AdapterView<HGridAdapter> {
 			
 		} else if(direction==FOCUS_RIGHT) {
 			final int lastVisiblePosition = mFirstPosition + getChildCount() - 1;
-			if(mSelectedPosition >= lastVisiblePosition) {
+			if(selectedPosition >= lastVisiblePosition) {
 				return INVALID_POSITION;
 			}
-			final int currentSelectedColumn = mSelectedPosition==INVALID_POSITION ? getColumn(firstPosition): getColumn(mSelectedPosition);
+			final int currentSelectedColumn = selectedPosition==INVALID_POSITION ? getColumn(firstPosition): getColumn(selectedPosition);
 			final int lastVisibleColumn = getColumn(lastVisiblePosition);
 			if(currentSelectedColumn >= lastVisibleColumn) {
 				return INVALID_POSITION;
 			}
-			final int currentSelectedRow =mSelectedPosition==INVALID_POSITION ? 0 : getRow(mSelectedPosition);
+			final int currentSelectedRow =selectedPosition==INVALID_POSITION ? 0 : getRow(selectedPosition);
 			for(int col=currentSelectedColumn+1; col<=lastVisibleColumn;col++) {
 				int[] positionRange = getPositionRangeByColumn(col);
 				// Skip the separator
@@ -795,9 +795,27 @@ public class HGridView extends AdapterView<HGridAdapter> {
 				}
 			}
 		} else if(direction==FOCUS_UP) {
-			
+			if(selectedPosition<= firstPosition) {
+				return INVALID_POSITION;
+			}
+			final int currentSelectedColumn = getColumn(selectedPosition);
+			final int nextSelectedColumn = getColumn(selectedPosition - 1);
+			if(nextSelectedColumn != currentSelectedColumn) {
+				return INVALID_POSITION;
+			} else {
+				return selectedPosition -1;
+			}
 		} else {
-			
+			if(selectedPosition<= firstPosition) {
+				return INVALID_POSITION;
+			}
+			final int currentSelectedColumn = getColumn(selectedPosition);
+			final int nextSelectedColumn = getColumn(selectedPosition);
+			if(nextSelectedColumn != currentSelectedColumn) {
+				return INVALID_POSITION;
+			} else {
+				return selectedPosition + 1;
+			}
 		}
 		return INVALID_POSITION;
 	}
