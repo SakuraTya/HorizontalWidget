@@ -1,21 +1,18 @@
-package org.sakuratya.horizontal.ui;
+package org.sakuratya.horizontal.backup;
 
 import java.util.ArrayList;
 import java.util.Arrays;
 
-import org.sakuratya.horizontal.R;
-import org.sakuratya.horizontal.adapter.HGridAdapter;
+import org.sakuratya.horizontal.backup.HGridAdapter;
 
 import android.content.Context;
 import android.database.DataSetObserver;
 import android.graphics.Canvas;
-import android.graphics.Paint;
 import android.graphics.Rect;
 import android.graphics.drawable.Drawable;
 import android.util.AttributeSet;
 import android.util.FloatMath;
 import android.util.Log;
-import android.util.SparseArray;
 import android.view.KeyEvent;
 import android.view.View;
 import android.view.ViewGroup;
@@ -50,10 +47,6 @@ public class HGridView extends AdapterView<HGridAdapter> {
     private static final int LAYOUT_NORMAL = 1;
     private static final int LAYOUT_MOVE_SELECTION = 2;
     private static final int LAYOUT_SPECIFIC = 3;
-    /**
-     * This is a special layout mode. which just jump to special section without selection.
-     */
-    private static final int LAYOUT_JUMP = 4;
     
 	private HGridAdapter mAdapter;
 	
@@ -96,9 +89,17 @@ public class HGridView extends AdapterView<HGridAdapter> {
      */
     private int mHorizontalSpacing;
     /**
+     * The separator horizontal space to its right column. 
+     */
+    private int mSeparatorRightSpacing;
+    /**
      * The vertical space between each item.
      */
     private int mVerticalSpace;
+    /**
+     * Currently we only support fixed width of separator
+     */
+    private int mSeparatorWidth;
    
     private int mRowHeight;
     /**
@@ -121,17 +122,9 @@ public class HGridView extends AdapterView<HGridAdapter> {
      */
     protected Drawable mSelector;
     
+    private int[] mSeparatorColumn;
+    
     protected int mMeasuredHeight;
-    
-    private int[] mSectionFirstColumns;
-    private int[] mSectionLastColumns;
-    
-    private Rect[] mSectionLabelRect;
-    
-    private int mLabelDrawableResId;
-    private int mLabelBackgroundDrawableResId;
-
-	private Rect mTempRect;
     
 	public HGridView(Context context, AttributeSet attrs, int defStyle) {
 		super(context, attrs, defStyle);
@@ -172,24 +165,11 @@ public class HGridView extends AdapterView<HGridAdapter> {
 			mDataSetObserver = new AdapterDataSetObserver();
 			mAdapter.registerDataSetObserver(mDataSetObserver);
 			mMaxColumn = getColumn(mAdapter.getCount() - 1);
-			
-			if(mAdapter.hasSection()) {
-				final int totalSectionNum = mAdapter.getTotalSectionNum();
-				mSectionFirstColumns = new int[totalSectionNum];
-				mSectionLastColumns = new int[totalSectionNum -1];
-				mSectionLabelRect = new Rect[totalSectionNum];
-				int columnCount = 0;
-				for(int i=0; i<totalSectionNum; i++) {
-					mSectionLabelRect[i] = new Rect();
-					mSectionFirstColumns[i] = columnCount;
-					final int sectionCount = mAdapter.getSectionCount(i);
-					columnCount += (int)FloatMath.ceil((float)sectionCount / (float)mRows);
-					if(columnCount - 1 < mMaxColumn) {
-						mSectionLastColumns[i] = columnCount - 1;
-					}
-				}
+			final int[] sectionIndexArray = mAdapter.getSectionIndexArray();
+			mSeparatorColumn = new int[sectionIndexArray.length];
+			for(int i=0; i<sectionIndexArray.length; i++) {
+				mSeparatorColumn[i] = getColumn(sectionIndexArray[i]);
 			}
-			
 			int position = lookForSelectablePosition(0, true);
 			setSelectedPositionInt(position);
 			setNextSelectedPositionInt(position);
@@ -226,20 +206,8 @@ public class HGridView extends AdapterView<HGridAdapter> {
 
 	@Override
 	public void setSelection(int position) {
-		setNextSelectedPositionInt(position);
-		mLayoutMode = LAYOUT_SET_SELECTION;
-		layoutChildren();
-	}
-	
-	public void jumpToSection(int sectionIndex) {
-		int itemCount = 0;
-		for(int i=0; i<sectionIndex; i++) {
-			itemCount += mAdapter.getSectionCount(i);
-		}
-		int sectionFirstPosition = itemCount;
-		setNextSelectedPositionInt(sectionFirstPosition);
-		mLayoutMode = LAYOUT_JUMP;
-		layoutChildren();
+		// TODO Auto-generated method stub
+		
 	}
 	
 	private void setSelectedPositionInt(int position) {
@@ -250,29 +218,65 @@ public class HGridView extends AdapterView<HGridAdapter> {
 		mNextSelectedPosition = position;
 	}
 	
+//	private void scrollListItemsBy(int delta) {
+//		final int listRight = getRight() - mListPadding.right;
+//		final int listLeft = mListPadding.left;
+//		final RecycleBin recycleBin = mRecycler;
+//		if(delta < 0) {
+//			// May need to pan views into right space.
+//			int numChildren = getChildCount();
+//			View last = getChildAt(numChildren -1);
+//			int lastVisiblePosition = mFirstPosition + numChildren -1;
+//			while(last.getLeft() < listRight) {
+//				if(lastVisiblePosition < mAdapter.getCount() -1) {
+//					last = addColumnRight(last, lastVisiblePosition);
+//					numChildren = getChildCount();
+//					lastVisiblePosition = mFirstPosition + numChildren -1;
+//				} else {
+//					break;
+//				}
+//			}
+//			// We must ensure the last view is not a separator. But two separator without a selectable view
+//			// between them is invalid, we can't ensure it will work properly
+//			if(!last.isEnabled() && lastVisiblePosition + 1 < mAdapter.getCount()) {
+//				addColumnRight(last, lastVisiblePosition);
+//			}
+//			
+//			// May need to pan off views left which is out bound of screen. And fully invisible.
+//			View first = getChildAt(0);
+//			int nextPosition = mFirstPosition + 1;
+//			// We must ensure the first view is not a separator.
+//			while(first.getRight() < listLeft && mAdapter.isEnabled(nextPosition)) {
+//				detachViewFromParent(first);
+//				recycleBin.addScrapView(first);
+//				first = getChildAt(0);
+//				mFirstPosition++;
+//				nextPosition = mFirstPosition + 1;
+//			}
+//		} else {
+////			View first = getChildAt(0);
+//			
+//		}
+//	}
+	
 	private void adjustViewLeftAndRight() {
-		final int fadingEdgeLength = getHorizontalFadingEdgeLength();
+//		final int fadingEdgeLength = getHorizontalFadingEdgeLength();
 		View child = getChildAt(0);
-		int delta = child.getLeft() - mListPadding.left - fadingEdgeLength;
+		int delta = child.getLeft() - mListPadding.left;
 		if(mFirstPosition!=0) {
 			// It's ok to have some spacing before the first item if it is the
 			// part of the horizontalSpacing.
-			delta -= mHorizontalSpacing;
+			if(mAdapter.isEnabled(mFirstPosition - 1)) {
+				delta -= mHorizontalSpacing;
+			} else {
+				delta -= mSeparatorRightSpacing;
+			}
 		}
 		if(delta < 0) {
 			// we want adjust too right not too left.
 			delta = 0;
 		}
 		offsetChildrenLeftAndRight(-delta);
-	}
-	
-	private void pinToRight(int childrenRight) {
-		final int count = getChildCount();
-		if(mFirstPosition + count == mAdapter.getCount() - 1) {
-			final int right = getChildAt(count - 1).getRight();
-			final int offset = childrenRight - right;
-			offsetChildrenLeftAndRight(offset);
-		}
 	}
 	
 	private View fillSpecific(int position, int left) {
@@ -290,13 +294,25 @@ public class HGridView extends AdapterView<HGridAdapter> {
 		}
 		
 		final int horizontalSpacing = mHorizontalSpacing;
+		final int separatorRightSpacing = mSeparatorRightSpacing;
 		
 		View before;
 		
 		View after;
-		before = fillLeft(motionCol - 1, referenceView.getLeft() - horizontalSpacing);
-		adjustViewLeftAndRight();
-		after = fillRight(motionCol + 1, referenceView.getRight() + horizontalSpacing);
+		int offset = 0;
+		if(Arrays.binarySearch(mSeparatorColumn, motionCol-1) < 0) {
+			offset = horizontalSpacing;
+		} else {
+			offset = separatorRightSpacing;
+		}
+		before = fillLeft(motionCol - 1, referenceView.getLeft() - offset);
+//		adjustViewLeftAndRight();
+		if(Arrays.binarySearch(mSeparatorColumn, motionCol + 1) < 0) {
+			offset = horizontalSpacing;
+		} else {
+			offset = separatorRightSpacing;
+		}
+		after = fillRight(motionCol + 1, referenceView.getRight() + offset);
 		
 		if(temp != null) {
 			return temp;
@@ -307,74 +323,11 @@ public class HGridView extends AdapterView<HGridAdapter> {
 		}
 	}
 	
-	private View fillFromSelection(int selectedLeft, int childrenLeft, int childrenRight) {
-		final int fadingEdgeLength = getHorizontalFadingEdgeLength();
-		final int selectedPosition = mSelectedPosition;
-		final int horizontalSpacing = mHorizontalSpacing;
-		int column = getColumn(selectedPosition);
-		
-		View sel;
-		View referenceView;
-		
-		int leftSelectionPixel = getLeftSelectionPixel(childrenLeft, fadingEdgeLength, column);
-		int rightSelectionPixel = getRightSelectionPixel(childrenRight, fadingEdgeLength, column);
-		sel = makeColumn(column, selectedLeft, true);
-		// Possibly changed again in fillUp if we add rows above this one.
-		mFirstPosition = getPositionRangeByColumn(column)[0];
-		referenceView = mReferenceView;
-		
-		adjustForLeftFadingEdge(referenceView, leftSelectionPixel, rightSelectionPixel);
-		adjustForRightFadingEdge(referenceView, leftSelectionPixel, rightSelectionPixel);
-		
-		int columnLeft = column - 1;
-		if(columnLeft >= 0) {
-			fillLeft(columnLeft, referenceView.getLeft() - horizontalSpacing);
-		}
-		int columnRight = column + 1;
-		if(columnRight <= mMaxColumn) {
-			fillRight(columnRight, referenceView.getRight() + horizontalSpacing);
-		}
-		
-		return sel;
-	}
-	
-	private View fillSelection(int childrenLeft, int childrenRight) {
-		final int selectedPosition = reconcileSelectedPosition();
-		final int fadingEdgeLength = getHorizontalFadingEdgeLength();
-		final int horizontalSpacing = mHorizontalSpacing;
-		
-		int col = getColumn(selectedPosition);
-		
-		int leftSelectionPixel = getLeftSelectionPixel(childrenLeft, fadingEdgeLength, col);
-		
-		final View sel = makeColumn(col, leftSelectionPixel, true);
-		
-		mFirstPosition = getPositionRangeByColumn(col)[0];
-		
-		final View referenceView = mReferenceView;
-		
-		int columnRight = col + 1;
-		if(columnRight <= mMaxColumn) {
-			fillRight(columnRight, referenceView.getRight() + horizontalSpacing);
-		}
-		pinToRight(childrenRight);
-		int columnLeft = col - 1;
-		if(columnLeft >= 0) {
-			fillLeft(columnLeft, referenceView.getLeft() - horizontalSpacing);
-		}
-		adjustViewLeftAndRight();
-		
-		return sel;
-	}
-	
 	private View fillFromLeft(int nextLeft) {
 		mFirstPosition = Math.min(mFirstPosition, mSelectedPosition);
 		mFirstPosition = Math.min(mFirstPosition, mAdapter.getCount() - 1);
 		if(mFirstPosition < 0) {
 			mFirstPosition = 0;
-		}
-		if(mFirstPosition==0) {
-			nextLeft += getHorizontalFadingEdgeLength();
 		}
 		int col = getColumn(mFirstPosition);
 		return fillRight(col, nextLeft);
@@ -393,7 +346,11 @@ public class HGridView extends AdapterView<HGridAdapter> {
 
 			// mReferenceView will change with each call to makeColumn()
 			// do not cache in a local variable outside of this loop
-			nextRight = mReferenceView.getLeft() - mHorizontalSpacing;
+			if(Arrays.binarySearch(mSeparatorColumn, col -1) < 0) {
+				nextRight = mReferenceView.getLeft() - mHorizontalSpacing;
+			} else {
+				nextRight = mReferenceView.getLeft() - mSeparatorRightSpacing;
+			}
 			
 			mFirstPosition = getPositionRangeByColumn(col)[0];
 			col--;
@@ -411,7 +368,11 @@ public class HGridView extends AdapterView<HGridAdapter> {
 			if(temp != null) {
 				selectedView = temp;
 			}
-			nextLeft = mReferenceView.getRight() + mHorizontalSpacing;
+			if(Arrays.binarySearch(mSeparatorColumn, col) < 0) {
+				nextLeft = mReferenceView.getRight() + mHorizontalSpacing;
+			} else {
+				nextLeft = mReferenceView.getRight() + mSeparatorRightSpacing;
+			}
 			
 			col++;
 		}
@@ -449,6 +410,8 @@ public class HGridView extends AdapterView<HGridAdapter> {
 		final int fadingEdgeLength = getHorizontalFadingEdgeLength();
 		final int nextSelectedPosition = mNextSelectedPosition;
 		final int horizontalSpacing = mHorizontalSpacing;
+		final int separatorRightSpacing = mSeparatorRightSpacing;
+		final int separatorWidth = mSeparatorWidth;
 		View selectedView;
 		View referenceView;
 		
@@ -457,8 +420,14 @@ public class HGridView extends AdapterView<HGridAdapter> {
 		int oldCol = getColumn(selectedPosition);
 		int col = getColumn(nextSelectedPosition);
 		
-		mFirstPosition = getPositionRangeByColumn(col)[0];
 		int colDelta = col - oldCol;
+		// offset is spacing between new column and old column, when there ara a separator between new column and old column
+		// offset should add the separator spacing.
+		int offset = horizontalSpacing;
+		if(colDelta > 1) {
+			offset += separatorWidth + separatorRightSpacing;
+		}
+		
 		final int leftSelectionPixel = getLeftSelectionPixel(childrenLeft, fadingEdgeLength, col);
 		final int rightSelectionPixel = getRightSelectionPixel(childrenRight, fadingEdgeLength, col);
 		if(colDelta > 0) {
@@ -467,7 +436,7 @@ public class HGridView extends AdapterView<HGridAdapter> {
 			 */
 			final int oldRight = mReferenceViewInSelectedColumn == null ? 0: mReferenceViewInSelectedColumn.getRight();
 			
-			selectedView = makeColumn(col, oldRight + horizontalSpacing, true);
+			selectedView = makeColumn(col, oldRight + offset, true);
 			referenceView = mReferenceView;
 			adjustForRightFadingEdge(referenceView, leftSelectionPixel, rightSelectionPixel);
 		} else if(colDelta < 0) {
@@ -476,7 +445,7 @@ public class HGridView extends AdapterView<HGridAdapter> {
 			 */
 			final int oldLeft = mReferenceViewInSelectedColumn == null ? 0: mReferenceViewInSelectedColumn.getLeft();
 			
-			selectedView = makeColumn(col, oldLeft - horizontalSpacing, false);
+			selectedView = makeColumn(col, oldLeft - offset, false);
 			referenceView = mReferenceView;
 			adjustForLeftFadingEdge(referenceView, leftSelectionPixel, rightSelectionPixel);
 		} else {
@@ -489,13 +458,34 @@ public class HGridView extends AdapterView<HGridAdapter> {
 			
 		}
 		
+		
+//		final int oldLeft = mReferenceViewInSelectedColumn==null?0:mReferenceViewInSelectedColumn.getLeft();
+//	
+//		/*
+//		 *  We use amount to make column, because there maybe exists a separator, we can't predict how far we should scroll. use the amount that we calculated just before.
+//		 */
+//		selectedView = makeColumn(col, oldLeft+delta - mAmountToScroll, true);
+//		referenceView = mReferenceView;
+		
 		int columnLeft = col - 1;
 		if(columnLeft >= 0) {
-			fillLeft(columnLeft, referenceView.getLeft() - horizontalSpacing);
+			int nextRight = referenceView.getLeft();
+			if(Arrays.binarySearch(mSeparatorColumn, columnLeft) < 0) {
+				nextRight -= horizontalSpacing;
+			} else {
+				nextRight -= separatorRightSpacing;
+			}
+			fillLeft(columnLeft, nextRight);
 		}
 		int columnRight = col + 1;
 		if(columnRight <= mMaxColumn) {
-			fillRight(columnRight, referenceView.getRight() + horizontalSpacing);
+			int nextLeft = referenceView.getRight();
+			if(Arrays.binarySearch(mSeparatorColumn, columnRight) < 0) {
+				nextLeft += horizontalSpacing;
+			} else {
+				nextLeft += horizontalSpacing;
+			}
+			fillRight(columnRight, nextLeft);
 		}
 		return selectedView;
 	}
@@ -510,7 +500,14 @@ public class HGridView extends AdapterView<HGridAdapter> {
 	 */
 	private int getLeftSelectionPixel(int childrenLeft, int fadingEdgeLength ,int col) {
 		int leftSelectionPixel = childrenLeft;
-		leftSelectionPixel += fadingEdgeLength;
+		if(mAdapter.hasSection()) {
+			if(col==1) {
+				leftSelectionPixel += mSeparatorWidth + mSeparatorRightSpacing;
+			}
+		}
+		if(col>0) {
+			leftSelectionPixel += fadingEdgeLength;
+		}
 		return leftSelectionPixel;
 	}
 	
@@ -548,12 +545,16 @@ public class HGridView extends AdapterView<HGridAdapter> {
 			}
 			if(selected) {
 				selectedView = child;
+				
 			}
 		}
 		
 		mReferenceView = child;
+		Log.d(TAG, "mReferenceView getLeft()="+ mReferenceView.getLeft());
+		
 		if(selectedView!=null) {
 			mReferenceViewInSelectedColumn = mReferenceView;
+			Log.d(TAG, "mReferenceViewInSelectedColumn getLeft()="+ mReferenceViewInSelectedColumn.getLeft());
 		}
 		return selectedView;
 	}
@@ -580,14 +581,19 @@ public class HGridView extends AdapterView<HGridAdapter> {
 	private void setupChild(View child, int position, int x, boolean flow, int childrenTop, boolean selected, boolean recycled, int where) {
 		boolean isSelected = selected && shouldShowSelector();
 		boolean updateChildSelected = isSelected != child.isSelected();
-		boolean needToMeasure = !recycled || updateChildSelected || child.isLayoutRequested();
+		boolean isSeparator = !mAdapter.isEnabled(position);
 		
 		HGridView.LayoutParams p = (HGridView.LayoutParams) child.getLayoutParams();
 		if(p == null) {
 			p = new HGridView.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.MATCH_PARENT);
+			p.mIsSeparator = isSeparator;
 		}
 		
+		boolean viewTypeDifferent = isSeparator != p.mIsSeparator;
+		
+		boolean needToMeasure = !recycled || updateChildSelected || child.isLayoutRequested() || viewTypeDifferent;
 		if(recycled) {
+//			p.width = ViewGroup.LayoutParams.WRAP_CONTENT;
 			attachViewToParent(child, where, p);
 		} else {
 			addViewInLayout(child, where, p, true);
@@ -599,8 +605,18 @@ public class HGridView extends AdapterView<HGridAdapter> {
 			}
 		}
 		if(needToMeasure) {
-			int childWidthSpec = ViewGroup.getChildMeasureSpec(MeasureSpec.makeMeasureSpec(0, MeasureSpec.UNSPECIFIED), 0, p.width);
-			int childHeightSpec = ViewGroup.getChildMeasureSpec(MeasureSpec.makeMeasureSpec(mRowHeight, MeasureSpec.EXACTLY), 0, p.height);
+//			if(isSeparator) {
+//				p.width = mSeparatorWidth;
+//			}
+			int childWidthSpec = 0;
+			int childHeightSpec = 0;
+			if(isSeparator) {
+				childWidthSpec = ViewGroup.getChildMeasureSpec(MeasureSpec.makeMeasureSpec(0, MeasureSpec.UNSPECIFIED), 0, mSeparatorWidth);
+				childHeightSpec = ViewGroup.getChildMeasureSpec(MeasureSpec.makeMeasureSpec(mMeasuredHeight, MeasureSpec.EXACTLY), 0, p.height);
+			} else {
+				childWidthSpec = ViewGroup.getChildMeasureSpec(MeasureSpec.makeMeasureSpec(0, MeasureSpec.UNSPECIFIED), 0, p.width);
+				childHeightSpec = ViewGroup.getChildMeasureSpec(MeasureSpec.makeMeasureSpec(mRowHeight, MeasureSpec.EXACTLY), 0, p.height);
+			}
 			child.measure(childWidthSpec, childHeightSpec);
 		} else {
 			cleanupLayoutState(child);
@@ -687,34 +703,19 @@ public class HGridView extends AdapterView<HGridAdapter> {
 			int childCount = getChildCount();
 			
 			int index;
-			View sel = null;
+			View sel;
 			View oldSel = null;
 			View oldFirst = null;
 			View newSel = null;
-			boolean needToScroll = false;
 			int delta = 0;
 			switch(mLayoutMode) {
-			case LAYOUT_JUMP:
-				index = mNextSelectedPosition - mFirstPosition;
-				if(index >= 0 && index < childCount) {
-					newSel = getChildAt(index);
-				}
-				int nextSectionIndex = mAdapter.getSectionIndex(mNextSelectedPosition);
-				int lastIndexOfNextSection = index + mAdapter.getSectionCount(nextSectionIndex);
-				if(lastIndexOfNextSection > 0 && lastIndexOfNextSection < childCount) {
-					View lastViewOfNextSection = getChildAt(lastIndexOfNextSection);
-					if(newSel!=null && lastViewOfNextSection!=null) {
-						needToScroll = true;
-					}
-				}
-				break;
 			case LAYOUT_SET_SELECTION:
-				index = mNextSelectedPosition - mFirstPosition;
-				if(index >=0 && index < childCount) {
-					newSel = getChildAt(index);
-				}
 				break;
 			case LAYOUT_MOVE_SELECTION:
+//				index = mNextSelectedPosition - mFirstPosition;
+//				if(index>=0 && index < childCount) {
+//					newSel = getChildAt(index);
+//				}
 				delta = mNextSelectedPosition - mSelectedPosition;
 				break;
 			default:
@@ -732,8 +733,6 @@ public class HGridView extends AdapterView<HGridAdapter> {
 			}
 			setSelectedPositionInt(mNextSelectedPosition);
 			
-			resetLabel();
-			
 			if(mDataChanged) {
 				for(int i=0; i<childCount;i++) {
 					recycleBin.addScrapView(getChildAt(i));
@@ -745,19 +744,6 @@ public class HGridView extends AdapterView<HGridAdapter> {
 			detachAllViewsFromParent();
 			
 			switch(mLayoutMode) {
-			case LAYOUT_JUMP:
-				if(needToScroll) {
-					fillFromSelection(newSel.getLeft(), childrenLeft, childrenRight);
-				} else {
-					fillSelection(childrenLeft, childrenRight);
-				}
-				break;
-			case LAYOUT_SET_SELECTION:
-				if(newSel!=null) {
-					fillFromSelection(newSel.getLeft(), childrenLeft, childrenRight);
-				} else {
-					fillSelection(childrenLeft, childrenRight);
-				}
 			case LAYOUT_MOVE_SELECTION:
 //				int delta = newSel.getLeft() - mReferenceViewInSelectedColumn.getLeft();
 				sel = moveSelection(delta, childrenLeft, childrenRight);
@@ -790,12 +776,6 @@ public class HGridView extends AdapterView<HGridAdapter> {
 		} finally {
 			
 			mAmountToScroll = 0;
-		}
-	}
-	
-	private void resetLabel() {
-		for(Rect rect: mSectionLabelRect) {
-			rect.setEmpty();
 		}
 	}
 	
@@ -836,7 +816,7 @@ public class HGridView extends AdapterView<HGridAdapter> {
         final int itemCount = mAdapter == null ? 0 : mAdapter.getCount();
         if(itemCount > 0) {
         	final View child = obtainView(0, mIsScrap);
-        	HGridView.LayoutParams p = (HGridView.LayoutParams) child.getLayoutParams();
+        HGridView.LayoutParams p = (HGridView.LayoutParams) child.getLayoutParams();
         	if(p==null) {
         		p = new HGridView.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.MATCH_PARENT);
         		child.setLayoutParams(p);
@@ -941,11 +921,19 @@ public class HGridView extends AdapterView<HGridAdapter> {
 		if(nextSelectedPosition==INVALID_POSITION) {
 			return false;
 		}
-
+		
+//		int amountToScroll = amountToScroll(direction, nextSelectedPosition);
+//		Log.d(TAG, "amountToScroll="+amountToScroll);
 		if(nextSelectedPosition!=INVALID_POSITION) {
 			setNextSelectedPositionInt(nextSelectedPosition);
 		}
-
+//		if(amountToScroll>0) {
+//			mAmountToScroll = amountToScroll;
+//			
+////			scrollListItemsBy(direction==FOCUS_RIGHT?amountToScroll:-amountToScroll);
+//		} else {
+//			mAmountToScroll = 0;
+//		}
 		if(nextSelectedPosition!=INVALID_POSITION) {
 			mLayoutMode = LAYOUT_MOVE_SELECTION;
 			layoutChildren();
@@ -964,9 +952,14 @@ public class HGridView extends AdapterView<HGridAdapter> {
 				return INVALID_POSITION;
 			}
 			final int currentSelectedRow =selectedPosition==INVALID_POSITION ? 0 : getRow(selectedPosition);
-			int[] positionRange = getPositionRangeByColumn(currentSelectedColumn - 1);
-			// If next column has less rows than currentSelectedRow, just return the last row of next column. 
-			return currentSelectedRow > positionRange[1] - positionRange[0] ? positionRange[1] : positionRange[0] + currentSelectedRow;
+			for(int col=currentSelectedColumn-1; col>=0;col--) {
+				int[] positionRange = getPositionRangeByColumn(col);
+				// Skip the separator
+				if(mAdapter.isEnabled(positionRange[0])) {
+					// If next column has less rows than currentSelectedRow, just return the last row of next column. 
+					return currentSelectedRow > positionRange[1] ? positionRange[1] : positionRange[0] + currentSelectedRow;
+				}
+			}
 			
 		} else if(direction==FOCUS_RIGHT) {
 			if(selectedPosition >= mAdapter.getCount() - 1) {
@@ -977,9 +970,14 @@ public class HGridView extends AdapterView<HGridAdapter> {
 				return INVALID_POSITION;
 			}
 			final int currentSelectedRow =selectedPosition==INVALID_POSITION ? 0 : getRow(selectedPosition);
-			int[] positionRange = getPositionRangeByColumn(currentSelectedColumn + 1);
-			// If next column has less rows than currentSelectedRow, just return the last row of next column. 
-			return currentSelectedRow > positionRange[1] - positionRange[0] ? positionRange[1] : positionRange[0] + currentSelectedRow;
+			for(int col=currentSelectedColumn+1; col<=mMaxColumn;col++) {
+				int[] positionRange = getPositionRangeByColumn(col);
+				// Skip the separator
+				if(mAdapter.isEnabled(positionRange[0])) {
+					// If next column has less rows than currentSelectedRow, just return the last row of next column. 
+					return currentSelectedRow > positionRange[1] ? positionRange[1] : positionRange[0] + currentSelectedRow;
+				}
+			}
 		} else if(direction==FOCUS_UP) {
 			if(selectedPosition<= firstPosition) {
 				return INVALID_POSITION;
@@ -992,7 +990,7 @@ public class HGridView extends AdapterView<HGridAdapter> {
 				return selectedPosition -1;
 			}
 		} else {
-			if(selectedPosition >= mAdapter.getCount() - 1) {
+			if(selectedPosition<= firstPosition) {
 				return INVALID_POSITION;
 			}
 			final int currentSelectedColumn = getColumn(selectedPosition);
@@ -1003,10 +1001,77 @@ public class HGridView extends AdapterView<HGridAdapter> {
 				return selectedPosition + 1;
 			}
 		}
+		return INVALID_POSITION;
 	}
+	
+//	private int lookForSelectablePositionOnScreen(int direction) {
+//		final int firstPosition = mFirstPosition;
+//		final int selectedPosition = mSelectedPosition;
+//		if(direction== FOCUS_LEFT) {
+//			final int lastVisiblePosition = mFirstPosition + getChildCount() - 1;
+//			final int currentSelectedColumn = selectedPosition==INVALID_POSITION ? getColumn(lastVisiblePosition): getColumn(selectedPosition);
+//			final int firstColumn = getColumn(firstPosition);
+//			if(currentSelectedColumn<=0 && currentSelectedColumn < firstColumn) {
+//				return INVALID_POSITION;
+//			}
+//			final int currentSelectedRow =selectedPosition==INVALID_POSITION ? 0 : getRow(selectedPosition);
+//			for(int col=currentSelectedColumn-1; col>=firstColumn;col--) {
+//				int[] positionRange = getPositionRangeByColumn(col);
+//				// Skip the separator
+//				if(mAdapter.isEnabled(positionRange[0])) {
+//					// If next column has less rows than currentSelectedRow, just return the last row of next column. 
+//					return currentSelectedRow > positionRange[1] ? positionRange[1] : positionRange[0] + currentSelectedRow;
+//				}
+//			}
+//			
+//		} else if(direction==FOCUS_RIGHT) {
+//			final int lastVisiblePosition = mFirstPosition + getChildCount() - 1;
+//			if(selectedPosition >= lastVisiblePosition) {
+//				return INVALID_POSITION;
+//			}
+//			final int currentSelectedColumn = selectedPosition==INVALID_POSITION ? getColumn(firstPosition): getColumn(selectedPosition);
+//			final int lastVisibleColumn = getColumn(lastVisiblePosition);
+//			if(currentSelectedColumn >= lastVisibleColumn) {
+//				return INVALID_POSITION;
+//			}
+//			final int currentSelectedRow =selectedPosition==INVALID_POSITION ? 0 : getRow(selectedPosition);
+//			for(int col=currentSelectedColumn+1; col<=lastVisibleColumn;col++) {
+//				int[] positionRange = getPositionRangeByColumn(col);
+//				// Skip the separator
+//				if(mAdapter.isEnabled(positionRange[0])) {
+//					// If next column has less rows than currentSelectedRow, just return the last row of next column. 
+//					return currentSelectedRow > positionRange[1] ? positionRange[1] : positionRange[0] + currentSelectedRow;
+//				}
+//			}
+//		} else if(direction==FOCUS_UP) {
+//			if(selectedPosition<= firstPosition) {
+//				return INVALID_POSITION;
+//			}
+//			final int currentSelectedColumn = getColumn(selectedPosition);
+//			final int nextSelectedColumn = getColumn(selectedPosition - 1);
+//			if(nextSelectedColumn != currentSelectedColumn) {
+//				return INVALID_POSITION;
+//			} else {
+//				return selectedPosition -1;
+//			}
+//		} else {
+//			if(selectedPosition<= firstPosition) {
+//				return INVALID_POSITION;
+//			}
+//			final int currentSelectedColumn = getColumn(selectedPosition);
+//			final int nextSelectedColumn = getColumn(selectedPosition);
+//			if(nextSelectedColumn != currentSelectedColumn) {
+//				return INVALID_POSITION;
+//			} else {
+//				return selectedPosition + 1;
+//			}
+//		}
+//		return INVALID_POSITION;
+//	}
 	
 	/**
 	 * Get zero based column according to given position.
+	 * Note that a separator is also take a column.
 	 * @param position
 	 * @return a zero based column index.
 	 */
@@ -1018,10 +1083,10 @@ public class HGridView extends AdapterView<HGridAdapter> {
 				int itemCount = 0;
 				for(int i=0; i < sectionIndex; i++) {
 					int sectionCount = mAdapter.getSectionCount(i);
-					column += (int)FloatMath.ceil((float)sectionCount / (float) mRows);
+					column += (int)Math.ceil((float)sectionCount / (float) mRows);
 					itemCount += sectionCount;
 				}
-				column += (position - itemCount) / mRows;
+				column += mAdapter.isEnabled(position)  ?  sectionIndex + (int)Math.ceil((float)(position - (itemCount + sectionIndex)) /(float)mRows) : sectionIndex;
 			} else {
 				column = (int)FloatMath.floor((float)position /(float) mRows);
 			}
@@ -1038,6 +1103,9 @@ public class HGridView extends AdapterView<HGridAdapter> {
 	 */
 	private int getRow(int position) {
 		if(position>=0 && position < mAdapter.getCount()) {
+			if(!mAdapter.isEnabled(position)) {
+				return 0;
+			}
 			int row = 0;
 			if(mAdapter.hasSection()) {
 				final int sectionIndex = mAdapter.getSectionIndex(position);
@@ -1045,7 +1113,7 @@ public class HGridView extends AdapterView<HGridAdapter> {
 				for(int i=0; i<sectionIndex;i++) {
 					prevSectionItemCount += mAdapter.getSectionCount(i);
 				}
-				int currentSectionCount = position - prevSectionItemCount;
+				int currentSectionCount = position - prevSectionItemCount - sectionIndex - 1;
 				row = currentSectionCount % mRows;
 			} else {
 				row = position % mRows;
@@ -1057,23 +1125,29 @@ public class HGridView extends AdapterView<HGridAdapter> {
 	
 	private int[] getPositionRangeByColumn(int column) {
 		int[] positionRange = new int[2];
-		
-		final int totalSectionCount = mAdapter.getTotalSectionNum();
+		final int indexOfSectionIndexArray =  Arrays.binarySearch(mSeparatorColumn, column);
+		if(indexOfSectionIndexArray>=0) {
+			//This column is a separator
+			positionRange[0] = mAdapter.getSectionIndexArray()[indexOfSectionIndexArray];
+			positionRange[1] = positionRange[0];
+			return positionRange;
+		}
+		final int totalSectionCount = mAdapter.getSectionCount();
 		int currentSectionIndex = 0;
 		int itemCount = 0;
 		int col = 0;
 		for(int i=0; i<totalSectionCount; i++) {
 			final int sectionCount = mAdapter.getSectionCount(i);
-			final int sectionColumnCount =  (int)FloatMath.ceil((float)sectionCount / (float) mRows);
-			if(col + sectionColumnCount > column) {
+			final int sectionColumnCount =  (int)Math.ceil((float)sectionCount / (float) mRows);
+			if(col+i + sectionColumnCount>=column) {
 				currentSectionIndex = i;
 				break;
 			}
 			col += sectionColumnCount;
 			itemCount+=sectionCount;
 		}
-		int positionStart = itemCount + (column - col)* mRows;
-		final int lastPositionOfCurrentSection = mAdapter.getSectionCount(currentSectionIndex) + itemCount - 1;
+		int positionStart = itemCount + currentSectionIndex + 1 + (column - (col+currentSectionIndex + 1))* mRows;
+		final int lastPositionOfCurrentSection = mAdapter.getSectionCount(currentSectionIndex) + itemCount + currentSectionIndex;
 		int positionEnd = positionStart;
 		while(positionEnd < positionStart + mRows && positionEnd <= lastPositionOfCurrentSection) {
 			positionRange[1] = positionEnd;
@@ -1084,21 +1158,73 @@ public class HGridView extends AdapterView<HGridAdapter> {
 		return positionRange;
 	}
 	
-	/**
-     * @return A position to select. First we try mSelectedPosition. If that has been clobbered by
-     * entering touch mode, we then try mResurrectToPosition. Values are pinned to the range
-     * of items available in the adapter
-     */
-    int reconcileSelectedPosition() {
-        int position = mSelectedPosition;
-        if (position < 0) {
-            position = mResurrectToPosition;
-        }
-        position = Math.max(0, position);
-        position = Math.min(position, mAdapter.getCount() - 1);
-        return position;
-    }
-    
+	private int amountToScroll(int direction, int nextSelectedPosition) {
+		final int listRight = getWidth() + mListPadding.right;
+		final int listLeft = mListPadding.left;
+		
+		if(direction==FOCUS_RIGHT) {
+			int indexToMakeVisible = getChildCount() - 1;
+			if(nextSelectedPosition!=INVALID_POSITION) {
+				indexToMakeVisible = nextSelectedPosition - mFirstPosition;
+			}
+			
+			final int positionToMakeVisible = indexToMakeVisible + mFirstPosition;
+			final View viewToMakeVisible = getChildAt(indexToMakeVisible);
+			
+			int goalRight = listRight;
+			if(positionToMakeVisible < mAdapter.getCount() -1) {
+				goalRight -= getArrowScrollPreviewLength();
+			}
+			
+			if(viewToMakeVisible.getRight() < goalRight) {
+				return 0;
+			}
+			
+			if(nextSelectedPosition!=INVALID_POSITION && goalRight - viewToMakeVisible.getLeft() >  getMaxScrollAmount()) {
+				// item already has enough of it visible, changing selection is good enough
+				return 0;
+			}
+			
+			int amountToScroll = viewToMakeVisible.getRight() - goalRight;
+			if(mFirstPosition+getChildCount()==mAdapter.getCount()) {
+				// Make sure we will not scroll over the last item.
+				final int max = getChildAt(mFirstPosition+getChildCount()-1).getRight() - goalRight;
+				amountToScroll = Math.min(max, amountToScroll);
+			}
+			return Math.min(amountToScroll, getMaxScrollAmount());
+		} else {
+			int indexToMakeVisible = 0;
+			if(nextSelectedPosition!=INVALID_POSITION) {
+				indexToMakeVisible = nextSelectedPosition - mFirstPosition;
+			}
+			
+			final int positionToMakeVisible = indexToMakeVisible + mFirstPosition;
+			final View viewToMakeVisible = getChildAt(indexToMakeVisible);
+			
+			int goalLeft = listLeft;
+			if(positionToMakeVisible > 0) {
+				goalLeft += getArrowScrollPreviewLength();
+			}
+			
+			if(viewToMakeVisible.getLeft() > goalLeft) {
+				return 0;
+			}
+			
+			if(nextSelectedPosition!=INVALID_POSITION && viewToMakeVisible.getRight() - goalLeft > getMaxScrollAmount()) {
+				// item already has enough of it visible, changing selection is good enough
+				return 0;
+			}
+			
+			int amountToScroll = goalLeft - viewToMakeVisible.getLeft();
+			
+			if(mFirstPosition == 0) {
+				// Make sure we will not scroll over the last item.
+				final int max = getChildAt(0).getLeft() - goalLeft;
+				amountToScroll = Math.min(max, amountToScroll);
+			}
+			return Math.min(amountToScroll, getMaxScrollAmount());
+		}
+	}
 
 	private int getArrowScrollPreviewLength() {
 		return Math.max(MIN_SCROLL_PREVIEW_PIXELS, getHorizontalFadingEdgeLength());
@@ -1144,90 +1270,8 @@ public class HGridView extends AdapterView<HGridAdapter> {
 	
 	@Override
 	protected void dispatchDraw(Canvas canvas) {
-		if(mAdapter.hasSection() && getChildCount() > 0) {
-			drawSectionLabels(canvas);
-		}
 		drawSelector(canvas);
 		super.dispatchDraw(canvas);
-	}
-	
-	/**
-	 * Draw section labels.
-	 * @param canvas
-	 */
-	private void drawSectionLabels(Canvas canvas) {
-		final int firstPosition = mFirstPosition;
-		final int firstVisibleColumn = getColumn(mFirstPosition);
-		final int lastVisibleColumn = getColumn(mFirstPosition + getChildCount() - 1);
-		final int leftBound = mListPadding.left;
-		final int rightBound = getRight() - mListPadding.right;
-		// look up all visible column on screen. check if it is in the mSectionFirstColumns
-		// or mSectionLastColumns.
-		for(int i=firstVisibleColumn; i<=lastVisibleColumn; i++) {
-			final int sectionFirstColumnIndex = Arrays.binarySearch(mSectionFirstColumns, i);
-			
-			if(sectionFirstColumnIndex>=0) {
-				Rect rect = mSectionLabelRect[sectionFirstColumnIndex];
-				// we don't want set a Rect twice
-				if(rect.isEmpty()) {
-					final int columnStart = getPositionRangeByColumn(i)[0];
-					final View referenceView = getChildAt(columnStart - firstPosition);
-					// only if the left edge of referenceView is on screen, we will draw
-					// its label before it.
-					if(referenceView.getLeft() > leftBound) {
-						rect.top = mListPadding.top + mVerticalSpace;
-						rect.right = referenceView.getLeft();
-						rect.left = rect.right - mHorizontalSpacing;
-						rect.bottom = getBottom() - mListPadding.bottom;
-					}
-				}
-			}
-			
-			final int sectionLastColumnIndex = Arrays.binarySearch(mSectionLastColumns, i);
-			
-			if(sectionLastColumnIndex >=0 ) {
-				Rect rect = mSectionLabelRect[sectionLastColumnIndex + 1];
-				if(rect.isEmpty()) {
-					final int columnStart = getPositionRangeByColumn(i)[0];
-					final View referenceView = getChildAt(columnStart - firstPosition);
-					if(referenceView.getRight() < rightBound) {
-						rect.top = mListPadding.top + mVerticalSpace;
-						rect.left = referenceView.getRight();
-						rect.right = rect.left + mHorizontalSpacing;
-						rect.bottom = getBottom() - mListPadding.bottom;
-					}
-				}
-			}
-		}
-		
-		for(int i=0; i< mSectionLabelRect.length; i++) {
-			Rect rect = mSectionLabelRect[i];
-			if(!rect.isEmpty()) {
-				String labelText = mAdapter.getLabelText(i);
-				Drawable[] drawables = obtainLabelDrawable();
-				if(drawables!=null && drawables.length>1) {
-					Drawable backgroundDrawable = drawables[0];
-					backgroundDrawable.setBounds(rect.left, rect.top, rect.right + mHorizontalSpacing, rect.bottom);
-					backgroundDrawable.draw(canvas);
-					Drawable labelDrawable = drawables[1];
-					labelDrawable.setBounds(rect);
-					labelDrawable.draw(canvas);
-				}
-				canvas.drawText(labelText, rect.left+10, rect.top+20, new Paint());
-			}
-		}
-		
-		// Test purpose
-//		Log.d(TAG, "mScrapDrawables size = " + mRecycler.mScrapDrawables.size());
-	}
-	
-	private Drawable[] obtainLabelDrawable() {
-		Drawable[] drawables =  new Drawable[2];
-		// label background drawable
-		drawables[0] = getResources().getDrawable(mLabelBackgroundDrawableResId);
-		// label drawable
-		drawables[1] = getResources().getDrawable(mLabelDrawableResId);
-		return drawables;
 	}
 	
 	private void drawSelector(Canvas canvas) {
@@ -1245,109 +1289,6 @@ public class HGridView extends AdapterView<HGridAdapter> {
         }
     }
 	
-	private boolean isCandidateSelection(int childIndex, int direction) {
-		
-		int position = childIndex + mFirstPosition;
-		int column = getColumn(position);
-		int[] positionRange = getPositionRangeByColumn(column);
-		switch(direction) {
-		case FOCUS_UP:
-			// coming from bottom, only valid if end of a column
-			return childIndex == positionRange[1];
-		case FOCUS_DOWN:
-			// coming from top, only valid if start of a column.
-			return childIndex == positionRange[0];
-		case FOCUS_LEFT:
-			// coming from right, need to be the last column.
-			return positionRange[1] == getChildCount() - 1;
-		case FOCUS_RIGHT:
-			// coming from left, only vali if in the most left column.
-			return positionRange[0] == 0;
-		default:
-            throw new IllegalArgumentException("direction must be one of "
-                    + "{FOCUS_UP, FOCUS_DOWN, FOCUS_LEFT, FOCUS_RIGHT}.");
-		}
-	}
-	
-	@Override
-	protected void onFocusChanged(boolean gainFocus, int direction,
-			Rect previouslyFocusedRect) {
-		super.onFocusChanged(gainFocus, direction, previouslyFocusedRect);
-		int closestChildIndex = -1;
-		if(gainFocus && previouslyFocusedRect != null) {
-//			previouslyFocusedRect.offset(mScrollX, mScrollY);
-			// figure out which item should be selected based on previously
-            // focused rect
-			Rect otherRect = mTempRect;
-            int minDistance = Integer.MAX_VALUE;
-            final int childCount = getChildCount();
-            for(int i = 0; i < childCount; i++) {
-            	if(!isCandidateSelection(i, direction)) {
-            		continue;
-            	}
-            	final View other = getChildAt(i);
-            	other.getDrawingRect(otherRect);
-            	offsetDescendantRectToMyCoords(other, otherRect);
-            	int distance = getDistance(previouslyFocusedRect, otherRect, direction);
-            	if(distance < minDistance) {
-            		minDistance = distance;
-            		closestChildIndex = i;
-            	}
-            }
-		}
-		if(closestChildIndex >= 0) {
-			setSelection(closestChildIndex + mFirstPosition);
-		} else {
-			requestLayout();
-		}
-	}
-    /**
-     * What is the distance between the source and destination rectangles given the direction of
-     * focus navigation between them? The direction basically helps figure out more quickly what is
-     * self evident by the relationship between the rects...
-     *
-     * @param source the source rectangle
-     * @param dest the destination rectangle
-     * @param direction the direction
-     * @return the distance between the rectangles
-     */
-    public static int getDistance(Rect source, Rect dest, int direction) {
-        int sX, sY; // source x, y
-        int dX, dY; // dest x, y
-        switch (direction) {
-        case View.FOCUS_RIGHT:
-            sX = source.right;
-            sY = source.top + source.height() / 2;
-            dX = dest.left;
-            dY = dest.top + dest.height() / 2;
-            break;
-        case View.FOCUS_DOWN:
-            sX = source.left + source.width() / 2;
-            sY = source.bottom;
-            dX = dest.left + dest.width() / 2;
-            dY = dest.top;
-            break;
-        case View.FOCUS_LEFT:
-            sX = source.left;
-            sY = source.top + source.height() / 2;
-            dX = dest.right;
-            dY = dest.top + dest.height() / 2;
-            break;
-        case View.FOCUS_UP:
-            sX = source.left + source.width() / 2;
-            sY = source.top;
-            dX = dest.left + dest.width() / 2;
-            dY = dest.bottom;
-            break;
-        default:
-            throw new IllegalArgumentException("direction must be one of "
-                    + "{FOCUS_UP, FOCUS_DOWN, FOCUS_LEFT, FOCUS_RIGHT}.");
-        }
-        int deltaX = dX - sX;
-        int deltaY = dY - sY;
-        return deltaY * deltaY + deltaX * deltaX;
-    }
-
 	/**
      * Set a Drawable that should be used to highlight the currently selected item.
      *
@@ -1416,11 +1357,12 @@ public class HGridView extends AdapterView<HGridAdapter> {
 		mRows = rows;
 	}
 	
-	public void setLabelDrawableResId(int resId) {
-		mLabelDrawableResId = resId;
+	public void setSeparatorRightSacing(int spacing) {
+		mSeparatorRightSpacing = spacing;
 	}
-	public void setLabelBackgroundDrawableResId(int resId) {
-		mLabelBackgroundDrawableResId = resId;
+	
+	public void setSeparatorWidth(int width) {
+		mSeparatorWidth = width;
 	}
 	
     public void dispatchStartTemporaryDetach(View child) {
@@ -1443,6 +1385,9 @@ public class HGridView extends AdapterView<HGridAdapter> {
 	        }
     	}
     }
+	
+	
+	
 	
 	
 	public static class LayoutParams extends ViewGroup.LayoutParams {
@@ -1473,8 +1418,6 @@ public class HGridView extends AdapterView<HGridAdapter> {
 		private View[] mActiveViews = new View[0];
 		
 		private ArrayList<View> mScrapViews = new ArrayList<View>();
-		
-//		public ArrayList<Drawable[]> mScrapDrawables = new ArrayList<Drawable[]>();
 		
 		public void markChildrenDirty() {
 			final ArrayList<View> scrap = mScrapViews;
@@ -1569,22 +1512,7 @@ public class HGridView extends AdapterView<HGridAdapter> {
 			for(int i=0; i<scrapCount; i++) {
 				removeViewInLayout(scrapView.remove(scrapCount - 1 - i));
 			}
-//			mScrapDrawables.clear();
 		}
-		
-//		public void addScrapDrawables(Drawable[] scrap) {
-//			mScrapDrawables.add(scrap);
-//		}
-//		
-//		public Drawable[] getScrapDrawables() {
-//			ArrayList<Drawable[]> scrapDrawables = mScrapDrawables;
-//			int size = scrapDrawables.size();
-//			if(size > 0) {
-//				return mScrapDrawables.remove(size - 1);
-//			} else {
-//				return null;
-//			}
-//		}
 	}
 	
 	class AdapterDataSetObserver extends DataSetObserver {

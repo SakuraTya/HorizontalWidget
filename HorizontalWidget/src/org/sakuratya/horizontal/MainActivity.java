@@ -9,6 +9,7 @@ import org.sakuratya.horizontal.ui.HGridView;
 
 import android.app.Activity;
 import android.graphics.drawable.ColorDrawable;
+import android.os.AsyncTask;
 import android.os.Bundle;
 import android.util.Log;
 import android.widget.GridView;
@@ -38,7 +39,7 @@ public class MainActivity extends Activity {
         buildHGridView();
         
 //        buildNormalGrid();
-        
+        new SimulatorTask().execute();
     }
 	
 	private void buildNormalGrid() {
@@ -69,7 +70,8 @@ public class MainActivity extends Activity {
         for(int i=0; i < 10; i++) {
         	ItemList item = new ItemList();
         	item.objects = new ArrayList<String>();
-        	for(int j=0; j < 200; j++) {
+        	item.title = ""+i;
+        	for(int j=0; j < 20; j++) {
         		item.objects.add("title: "+j);
         	}
         	mItemLists.add(item);
@@ -77,9 +79,13 @@ public class MainActivity extends Activity {
         
         HGridAdapterImpl adapter = new HGridAdapterImpl(this, mItemLists);
         
-        mHGridView.setHorizontalSpacing(22);
-        mHGridView.setVerticalSpacing(20);
-        mHGridView.setRowHeight(200);
+        mHGridView.setHorizontalSpacing(81);
+        mHGridView.setVerticalSpacing(2);
+        mHGridView.setRowHeight(252);
+        mHGridView.setFadingEdgeLength(137);
+        mHGridView.setHorizontalFadingEdgeEnabled(true);
+        mHGridView.setLabelDrawableResId(R.drawable.label);
+        mHGridView.setLabelBackgroundDrawableResId(R.drawable.label_bg);
         mHGridView.setRows(3);
         mHGridView.setSelector(R.drawable.selector);
         mHGridView.setAdapter(adapter);
@@ -88,5 +94,29 @@ public class MainActivity extends Activity {
         mHGridView.requestFocus();
 	}
 
+	class SimulatorTask extends AsyncTask<Void, Void, Void> {
+
+		@Override
+		protected Void doInBackground(Void... params) {
+			try {
+				for(int i=0; i<5; i++) {
+					Log.d(TAG, "count down: " + i);
+					Thread.sleep(1000);
+					
+				}
+			} catch (InterruptedException e) {
+				// TODO Auto-generated catch block
+				e.printStackTrace();
+			}
+			return null;
+		}
+
+		@Override
+		protected void onPostExecute(Void result) {
+			mHGridView.setSelection(190);
+			super.onPostExecute(result);
+		}
+		
+	}
 	
 }

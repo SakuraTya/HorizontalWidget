@@ -6,12 +6,12 @@
     <org.sakuratya.horizontal.ui.HGridView
         android:id="@+id/h_list_view"
         android:layout_width="match_parent"
-        android:layout_height="600dip"
-        android:layout_alignParentTop="true"
-        android:layout_alignParentLeft="true">
+        android:layout_height="wrap_content"
+        android:fadingEdge="horizontal"
+        android:fadingEdgeLength="137dip">
         
     </org.sakuratya.horizontal.ui.HGridView>
-    <TextView
+    <Button
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:text="Hello World"/>

@@ -1,4 +1,4 @@
-package org.sakuratya.horizontal.adapter;
+package org.sakuratya.horizontal.backup;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -7,7 +7,6 @@ import org.sakuratya.horizontal.R;
 import org.sakuratya.horizontal.model.ItemList;
 
 import android.content.Context;
-import android.text.TextUtils;
 import android.util.Log;
 import android.util.SparseArray;
 import android.view.LayoutInflater;
@@ -21,21 +20,25 @@ public class HGridAdapterImpl extends HGridAdapter<ItemList> {
 	
 	private Context mContext;
 	
-	private int mSize = 0;
+	private int mSize;
 	
 	private SparseArray<String> mTrueArray;
 	
 	public HGridAdapterImpl(Context context, ArrayList<ItemList> list) {
 		mContext = context;
 		if(list != null && list.size()>0) {
+			mSectionIndexArray = new int[list.size()];
 			mTrueArray = new SparseArray<String>();
 			mList = list;
 			for(int i=0; i<list.size(); i++) {
+				mSectionIndexArray[i] = mSize;
+				mTrueArray.put(mSize++, "separator");
 				for(int j=0; j < list.get(i).objects.size(); j++) {
 					mTrueArray.put(mSize++, list.get(i).objects.get(j));
 				}
 			}
 		}
+		Log.d(TAG, "mSectionIndexArray: "+Arrays.toString(mSectionIndexArray));
 	}
 
 	@Override
@@ -67,6 +70,11 @@ public class HGridAdapterImpl extends HGridAdapter<ItemList> {
 		}
 		String text = getItem(position);
 		holder.title.setText(text);
+		if(Arrays.binarySearch(mSectionIndexArray, position) >= 0) {
+			convertView.setBackgroundColor(0xff00f0fc);
+		} else {
+			convertView.setBackgroundDrawable(null);
+		}
 		return convertView;
 	}
 
@@ -74,7 +82,7 @@ public class HGridAdapterImpl extends HGridAdapter<ItemList> {
 	public int getSectionIndex(int position) {
 		int size = 0;
 		for(int i=0; i<mList.size(); i++) {
-			size += mList.get(i).objects.size();
+			size += mList.get(i).objects.size() + 1;
 			if(size > position) {
 				return i;
 			}
@@ -83,29 +91,21 @@ public class HGridAdapterImpl extends HGridAdapter<ItemList> {
 	}
 	
 	@Override
-	public int getSectionCount(int sectionIndex) {
-		return mList.get(sectionIndex).objects.size();
+	public int getSectionCount(int position) {
+		return mList.get(position).objects.size();
+	}
+
+	@Override
+	public boolean isEnabled(int position) {
+		if(Arrays.binarySearch(mSectionIndexArray, position)<0) {
+			return true;
+		} else {
+			return false;
+		}
 	}
 	
 	static class Holder {
 		TextView title;
-	}
-
-	@Override
-	public String getLabelText(int sectionIndex) {
-		String title = mList.get(sectionIndex).title;
-		if(TextUtils.isEmpty(title)) {
-			return null;
-		}
-		char[] labelText = new char[title.length() * 2 -1];
-		int pos = 0;
-		for(int i=0; i< title.length(); i++) {
-			labelText[pos++] = title.charAt(i);
-			if(pos<labelText.length) {
-				labelText[pos++] = '\n';
-			}
-		}
-		return String.valueOf(labelText);
 	}
 
 }
