@@ -40,7 +40,7 @@ public class HGridAdapterImpl extends HGridAdapter<ItemList> {
 
 	@Override
 	public int getCount() {
-		return mSize;
+		return mTrueArray.size();
 	}
 
 	@Override
@@ -107,5 +107,26 @@ public class HGridAdapterImpl extends HGridAdapter<ItemList> {
 		}
 		return String.valueOf(labelText);
 	}
-
+	
+	public String additionStr = "";
+	
+	public void modifyDataSet() {
+		for(int j=0; j<mList.size(); j++) {
+			ItemList item = mList.get(j);
+			int size = item.objects.size();
+			item.objects = new ArrayList<String>();
+			for(int k=0; k<size; k++) {
+				item.objects.add(additionStr+"\n Object: " + k + "\n Section: "+j);
+			}
+			
+		}
+		mTrueArray = new SparseArray<String>();
+		mSize=0;
+		for(int i=0; i<mList.size(); i++) {
+			for(int j=0; j < mList.get(i).objects.size(); j++) {
+				mTrueArray.put(mSize++, mList.get(i).objects.get(j));
+			}
+		}
+	}
+	
 }

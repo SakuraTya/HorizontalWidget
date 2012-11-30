@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <declare-styleable name="HGridView">
+        <attr name="horizontalSpacing" format="dimension"/>
+        <attr name="verticalSpacing" format="dimension"/>
+        <attr name="rowHeight" format="dimension"/>
+        <attr name="numRows" format="integer"/>
+        <attr name="labelDrawable" format="integer"/>
+        <attr name="labelBackgroundDrawable" format="integer"/>
+        <attr name="selectorDrawable" format="integer"/>
+        <attr name="labelLeftOffset" format="dimension"/>
+        <attr name="labelTopOffset" format="dimension"/>
+        <attr name="labelWidth" format="dimension"/>
+        <attr name="labelHeight" format="dimension"/>
+        <attr name="labelBackgroundLeftOffset" format="dimension"/>
+        <attr name="labelBackgroundTopOffset" format="dimension"/>
+        <attr name="labelBackgroundWidth" format="dimension"/>
+        <attr name="labelBackgroundHeight" format="dimension"/>
+        <attr name="labelTextSize" format="dimension"/>
+        <attr name="labelTextColor" format="color"/>
+        <attr name="labelTextMarginTop" format="dimension"/>
+        <attr name="labelTextMarginLeft" format="dimension"/>
+        <attr name="labelTextMarginRight" format="dimension"/>
+        <attr name="labelTextMarginBottom" format="dimension"/>
+    </declare-styleable>
+</resources>

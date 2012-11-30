@@ -1,5 +1,6 @@
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools"
+    xmlns:sakura="http://schemas.android.com/apk/res/org.sakuratya.horizontal"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:orientation="vertical">
@@ -7,8 +8,22 @@
         android:id="@+id/h_list_view"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:fadingEdge="horizontal"
-        android:fadingEdgeLength="137dip">
+        sakura:horizontalSpacing="81dip"
+        sakura:verticalSpacing="2dip"
+        sakura:rowHeight="252dip"
+        sakura:numRows="3"
+        sakura:labelDrawable="@drawable/label"
+        sakura:labelBackgroundDrawable="@drawable/label_bg"
+        sakura:selectorDrawable="@drawable/selector"
+        sakura:labelLeftOffset="10dip"
+        sakura:labelTopOffset="10dip"
+        sakura:labelWidth="70dip"
+        sakura:labelHeight="800dip"
+        sakura:labelTextSize="20sp"
+        sakura:labelTextColor="#FFFFFFFF"
+        sakura:labelTextMarginTop="30dip"
+        sakura:labelTextMarginLeft="15dip"
+        >
         
     </org.sakuratya.horizontal.ui.HGridView>
     <Button

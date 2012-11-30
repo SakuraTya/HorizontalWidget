@@ -7,19 +7,23 @@ import org.sakuratya.horizontal.R;
 import org.sakuratya.horizontal.adapter.HGridAdapter;
 
 import android.content.Context;
+import android.content.res.TypedArray;
 import android.database.DataSetObserver;
 import android.graphics.Canvas;
 import android.graphics.Paint;
 import android.graphics.Rect;
 import android.graphics.drawable.Drawable;
+import android.text.TextUtils;
 import android.util.AttributeSet;
 import android.util.FloatMath;
 import android.util.Log;
-import android.util.SparseArray;
 import android.view.KeyEvent;
 import android.view.View;
 import android.view.ViewGroup;
+import android.view.accessibility.AccessibilityEvent;
+import android.widget.Adapter;
 import android.widget.AdapterView;
+import android.widget.ListView;
 
 /**
  * These is a horizontal scroll GridView with arrow key action support and a dataset of sections.
@@ -32,19 +36,6 @@ import android.widget.AdapterView;
 public class HGridView extends AdapterView<HGridAdapter> {
 	
 	private final static String TAG = "HGridView";
-	
-	/**
-     * When arrow scrolling, need a certain amount of pixels to preview next
-     * items.  This is usually the fading edge, but if that is small enough,
-     * we want to make sure we preview at least this many pixels.
-     */
-    private static final int MIN_SCROLL_PREVIEW_PIXELS = 2;
-
-    /**
-     * When arrow scrolling, ListView will never scroll more than this factor
-     * times the height of the list.
-     */
-    private static final float MAX_SCROLL_FACTOR = 0.33f;
     
     private static final int LAYOUT_SET_SELECTION = 0;
     private static final int LAYOUT_NORMAL = 1;
@@ -55,20 +46,28 @@ public class HGridView extends AdapterView<HGridAdapter> {
      */
     private static final int LAYOUT_JUMP = 4;
     
-	private HGridAdapter mAdapter;
+    private static final int LAYOUT_SYNC = 5;
+    
+    private static final int SYNC_SELECTED_POSITION = 0;
+    private static final int SYNC_FIRST_POSITION = 1;
+    
+    private static final int INVALID_POSITION = -1;
 	
-	private static final int INVALID_POSITION = -1;
+    private HGridAdapter mAdapter;
+    
+	private int mOldSelectedPosition;
 	private int mSelectedPosition;
 	private int mNextSelectedPosition;
 	
 	private int mResurrectToPosition;
-	/**
-     * The offset in pixels form the top of the AdapterView to the top
-     * of the currently selected view. Used to save and restore state.
-     */
-    private int mSelectedTop = 0;
+	
+    protected int mSyncPosition;
+    protected int mSpecificLeft;
     
-	private int mAmountToScroll = 0;
+    protected int mSyncMode;
+    
+    
+    private boolean mNeedSync = false;
 	/**
 	 * Set rows per column.
 	 */
@@ -132,15 +131,36 @@ public class HGridView extends AdapterView<HGridAdapter> {
     private int mLabelBackgroundDrawableResId;
 
 	private Rect mTempRect;
+	
+	private OnScrollListener mOnScrollListener;
+	
+	/**
+	 * Store the label and label background drawable's offset related to parent(label draw rectangle).
+	 */
+	private Rect mLabelDrawableOffset = new Rect();
+	private Rect mLabelBackgroundDrawableOffset = new Rect();
+	/**
+	 * Store the label text paint
+	 */
+	private Paint mLabelTextPaint;
+	
+	private Rect mLabelTextMargin = new Rect();
+	
+	private int mMinSingleTextHeight = 0;
+	private int mMinSingleTextWidth = 0;
     
+	private SelectionNotifier mSelectionNotifier;
+	
+	public int mScrollState = OnScrollListener.SCROLL_STATE_IDLE;
+	
 	public HGridView(Context context, AttributeSet attrs, int defStyle) {
 		super(context, attrs, defStyle);
-		initView();
+		initView(context, attrs);
 	}
 
 	public HGridView(Context context, AttributeSet attrs) {
 		super(context, attrs);
-		initView();
+		initView(context, attrs);
 	}
 
 	public HGridView(Context context) {
@@ -150,6 +170,65 @@ public class HGridView extends AdapterView<HGridAdapter> {
 	
 	private void initView() {
 		setWillNotDraw(false);
+//		setFocusable(true);
+		setClickable(true);
+        setFocusableInTouchMode(true);
+		setHorizontalFadingEdgeEnabled(true);
+	}
+	
+	private void initView(Context context, AttributeSet attrs) {
+		initView();
+		TypedArray a = context.obtainStyledAttributes(attrs, R.styleable.HGridView);
+		int hSpacing = a.getDimensionPixelOffset(R.styleable.HGridView_horizontalSpacing, 0);
+		setHorizontalSpacing(hSpacing);
+		int vSpacing = a.getDimensionPixelOffset(R.styleable.HGridView_verticalSpacing, 0);
+		setVerticalSpacing(vSpacing);
+		int labelDrawableResId = a.getResourceId(R.styleable.HGridView_labelDrawable, 0);
+		setLabelDrawableResId(labelDrawableResId);
+		int labelBackgroundDrawableResId = a.getResourceId(R.styleable.HGridView_labelBackgroundDrawable, 0);
+		setLabelBackgroundDrawableResId(labelBackgroundDrawableResId);
+		int rowHeight = a.getDimensionPixelOffset(R.styleable.HGridView_rowHeight, -1);
+		if(rowHeight > 0) {
+			setRowHeight(rowHeight);
+		}
+		int numRows = a.getInt(R.styleable.HGridView_numRows, 1);
+		setRows(numRows);
+		Drawable d = a.getDrawable(R.styleable.HGridView_selectorDrawable);
+		if(d!=null) {
+			setSelector(d);
+		}
+		
+		int labelLeftOffset = a.getDimensionPixelOffset(R.styleable.HGridView_labelLeftOffset, 0);
+		int labelTopOffset = a.getDimensionPixelOffset(R.styleable.HGridView_labelTopOffset, 0);
+		int labelWidth = a.getDimensionPixelOffset(R.styleable.HGridView_labelWidth, 0);
+		int labelHeight = a.getDimensionPixelOffset(R.styleable.HGridView_labelHeight, 0);
+		if(labelLeftOffset>0 || labelTopOffset > 0 || labelWidth > 0 || labelHeight > 0) {
+			setLabelDrawableOffset(labelLeftOffset, labelTopOffset, labelLeftOffset + labelWidth, labelTopOffset +labelHeight);
+		}
+		
+		int labelBackgroundLeftOffset = a.getDimensionPixelOffset(R.styleable.HGridView_labelBackgroundLeftOffset, 0);
+		int labelBackgroundTopOffset = a.getDimensionPixelOffset(R.styleable.HGridView_labelBackgroundTopOffset, 0);
+		int labelBackgroundWidth = a.getDimensionPixelOffset(R.styleable.HGridView_labelBackgroundWidth, 0);
+		int labelBackgroundheight = a.getDimensionPixelOffset(R.styleable.HGridView_labelBackgroundHeight, 0);
+		if(labelBackgroundLeftOffset > 0 || labelBackgroundTopOffset > 0 || labelBackgroundWidth > 0 || labelBackgroundheight > 0 ) {
+			setLabelBackgroundDrawableOffset(labelBackgroundLeftOffset, labelBackgroundTopOffset, labelBackgroundLeftOffset + labelBackgroundWidth, labelBackgroundTopOffset + labelBackgroundheight);
+		}
+		
+		int labelTextSize = a.getDimensionPixelSize(R.styleable.HGridView_labelTextSize, 20);
+		int labelTextColor = a.getColor(R.styleable.HGridView_labelTextColor, 0xffffffff);
+		mLabelTextPaint = new Paint();
+		mLabelTextPaint.setTextSize(labelTextSize);
+		mLabelTextPaint.setColor(labelTextColor);
+		
+		int labelTextMarginLeft = a.getDimensionPixelOffset(R.styleable.HGridView_labelTextMarginLeft, 0);
+		int labelTextMarginTop = a.getDimensionPixelOffset(R.styleable.HGridView_labelTextMarginTop, 0);
+		int labelTextMarginRight = a.getDimensionPixelOffset(R.styleable.HGridView_labelTextMarginRight, 0);
+		int labelTextMarginBottom = a.getDimensionPixelOffset(R.styleable.HGridView_labelTextMarginBottom, 0);
+		if(labelTextMarginLeft > 0 || labelTextMarginTop > 0 || labelTextMarginRight > 0 || labelTextMarginBottom > 0) {
+			setLabelTextMargin(labelTextMarginLeft, labelTextMarginTop, labelTextMarginRight, labelTextMarginBottom);
+		}
+		a.recycle();
+		
 	}
 
 	@Override
@@ -188,13 +267,15 @@ public class HGridView extends AdapterView<HGridAdapter> {
 						mSectionLastColumns[i] = columnCount - 1;
 					}
 				}
+				measureMinSingleTextDimension();
 			}
 			
 			int position = lookForSelectablePosition(0, true);
 			setSelectedPositionInt(position);
 			setNextSelectedPositionInt(position);
+			checkSelectionChanged();
 		} else {
-			
+			checkSelectionChanged();
 		}
 		requestLayout();
 	}
@@ -727,6 +808,11 @@ public class HGridView extends AdapterView<HGridAdapter> {
 				// Remember the previous first child
 				oldFirst = getChildAt(0);
 			}
+			
+			if(mDataChanged) {
+				handleDataChanged();
+			}
+			
 			if(mReferenceViewInSelectedColumn == null) {
 				mReferenceViewInSelectedColumn = oldSel;
 			}
@@ -745,6 +831,9 @@ public class HGridView extends AdapterView<HGridAdapter> {
 			detachAllViewsFromParent();
 			
 			switch(mLayoutMode) {
+			case LAYOUT_SYNC:
+				sel = fillSpecific(mSyncPosition, mSpecificLeft);
+				break;
 			case LAYOUT_JUMP:
 				if(needToScroll) {
 					fillFromSelection(newSel.getLeft(), childrenLeft, childrenRight);
@@ -754,10 +843,11 @@ public class HGridView extends AdapterView<HGridAdapter> {
 				break;
 			case LAYOUT_SET_SELECTION:
 				if(newSel!=null) {
-					fillFromSelection(newSel.getLeft(), childrenLeft, childrenRight);
+					sel = fillFromSelection(newSel.getLeft(), childrenLeft, childrenRight);
 				} else {
-					fillSelection(childrenLeft, childrenRight);
+					sel = fillSelection(childrenLeft, childrenRight);
 				}
+				break;
 			case LAYOUT_MOVE_SELECTION:
 //				int delta = newSel.getLeft() - mReferenceViewInSelectedColumn.getLeft();
 				sel = moveSelection(delta, childrenLeft, childrenRight);
@@ -786,16 +876,20 @@ public class HGridView extends AdapterView<HGridAdapter> {
 			}
 			mLayoutMode = LAYOUT_NORMAL;
 			mDataChanged = false;
-			setNextSelectedPositionInt(mSelectedPosition);
+			if(mAdapter.getCount() > 0) {
+				checkSelectionChanged();
+			}
+			invokeOnScrollListener();
 		} finally {
 			
-			mAmountToScroll = 0;
 		}
 	}
 	
 	private void resetLabel() {
-		for(Rect rect: mSectionLabelRect) {
-			rect.setEmpty();
+		if(mAdapter!=null && mAdapter.hasSection()) {
+			for(Rect rect: mSectionLabelRect) {
+				rect.setEmpty();
+			}
 		}
 	}
 	
@@ -844,7 +938,7 @@ public class HGridView extends AdapterView<HGridAdapter> {
         	int childWidthSpec = getChildMeasureSpec(MeasureSpec.makeMeasureSpec(0, MeasureSpec.UNSPECIFIED), 0, p.height);
         	int childHeightSpec = getChildMeasureSpec(MeasureSpec.makeMeasureSpec(mRowHeight, MeasureSpec.EXACTLY), 0, p.width);
         	child.measure(childWidthSpec, childHeightSpec);
-        	childWidth = child.getMeasuredHeight();
+        	childWidth = child.getMeasuredWidth();
         	mRecycler.addScrapView(child);
         }
     	if (widthMode == MeasureSpec.UNSPECIFIED) {
@@ -883,6 +977,9 @@ public class HGridView extends AdapterView<HGridAdapter> {
 	}
 	
 	private boolean commonKey(int keyCode, int repeatCount, KeyEvent event) {
+		if(mDataChanged) {
+			layoutChildren();
+		}
 		final int action = event.getAction();
 		boolean handled = false;
 		if(action!=KeyEvent.ACTION_UP) {
@@ -910,9 +1007,46 @@ public class HGridView extends AdapterView<HGridAdapter> {
 				if(!handled) {
 					handled = seekForOtherView(FOCUS_DOWN);
 				}
+				break;
+			case KeyEvent.KEYCODE_DPAD_CENTER:
+			case KeyEvent.KEYCODE_ENTER:
+				if(getChildCount()>0 && repeatCount == 0) {
+					keyPressed();
+				}
+				break;
 			}
+			
+		}
+		if((keyCode == KeyEvent.KEYCODE_DPAD_LEFT || keyCode == KeyEvent.KEYCODE_DPAD_RIGHT) && action == KeyEvent.ACTION_DOWN) {
+			checkScrollState(OnScrollListener.SCROLL_STATE_FOCUS_MOVING);
+		}
+		if((keyCode == KeyEvent.KEYCODE_DPAD_LEFT || keyCode == KeyEvent.KEYCODE_DPAD_RIGHT) && action == KeyEvent.ACTION_UP) {
+			checkScrollState(OnScrollListener.SCROLL_STATE_IDLE);
 		}
 		
+		if(action==KeyEvent.ACTION_UP) {
+			switch(keyCode) {
+			case KeyEvent.KEYCODE_DPAD_CENTER:
+			case KeyEvent.KEYCODE_ENTER:
+				if(!isEnabled()) {
+					return true;
+				}
+				if(isClickable() && isPressed() && mSelectedPosition>=0 && mAdapter!=null && mSelectedPosition < mAdapter.getCount()) {
+					final View v = getChildAt(mSelectedPosition - mFirstPosition);
+					if(v!=null) {
+						performItemClick(v, mSelectedPosition, 0);
+						v.setPressed(false);
+					}
+					setPressed(false);
+					return true;
+				}
+				break;
+			}
+		}
+
+		if(handled) {
+			return true;
+		}
 		switch(action) {
 		case KeyEvent.ACTION_DOWN:
 			return super.onKeyDown(keyCode, event);
@@ -937,7 +1071,7 @@ public class HGridView extends AdapterView<HGridAdapter> {
 	private boolean arrowScroll(int direction) {
 		
 		int nextSelectedPosition = lookForSelectablePositionOnScreen(direction);
-		Log.d(TAG, "mSelectedPosition="+mSelectedPosition+" nextSelectedPosition=" + nextSelectedPosition);
+//		Log.d(TAG, "mSelectedPosition="+mSelectedPosition+" nextSelectedPosition=" + nextSelectedPosition);
 		if(nextSelectedPosition==INVALID_POSITION) {
 			return false;
 		}
@@ -1100,13 +1234,13 @@ public class HGridView extends AdapterView<HGridAdapter> {
     }
     
 
-	private int getArrowScrollPreviewLength() {
-		return Math.max(MIN_SCROLL_PREVIEW_PIXELS, getHorizontalFadingEdgeLength());
-	}
+//	private int getArrowScrollPreviewLength() {
+//		return Math.max(MIN_SCROLL_PREVIEW_PIXELS, getHorizontalFadingEdgeLength());
+//	}
 	
-	private int getMaxScrollAmount() {
-		return (int) (MAX_SCROLL_FACTOR * (getRight() - getLeft()));
-	}
+//	private int getMaxScrollAmount() {
+//		return (int) (MAX_SCROLL_FACTOR * (getRight() - getLeft()));
+//	}
 	
 	public void offsetChildrenLeftAndRight(int offset) {
 		final int count = getChildCount();
@@ -1116,12 +1250,15 @@ public class HGridView extends AdapterView<HGridAdapter> {
 		}
 	}
 	
-	private void resetList() {
+	protected void resetList() {
 		removeAllViewsInLayout();
 		mDataChanged = false;
-		mSelectedPosition = INVALID_POSITION;
-		mNextSelectedPosition = INVALID_POSITION;
+		mNeedSync = false;
+		mOldSelectedPosition = INVALID_POSITION;
+		setSelectedPositionInt(INVALID_POSITION);
+		setNextSelectedPositionInt(INVALID_POSITION);
 		mFirstPosition = 0;
+		mSelectorRect.setEmpty();
 		invalidate();
 	}
 	
@@ -1144,7 +1281,7 @@ public class HGridView extends AdapterView<HGridAdapter> {
 	
 	@Override
 	protected void dispatchDraw(Canvas canvas) {
-		if(mAdapter.hasSection() && getChildCount() > 0) {
+		if(mAdapter!=null && mAdapter.hasSection() && getChildCount() > 0) {
 			drawSectionLabels(canvas);
 		}
 		drawSelector(canvas);
@@ -1200,20 +1337,66 @@ public class HGridView extends AdapterView<HGridAdapter> {
 			}
 		}
 		
+		if(mLabelTextPaint==null) {
+			mLabelTextPaint = new Paint();
+		}
+		
 		for(int i=0; i< mSectionLabelRect.length; i++) {
-			Rect rect = mSectionLabelRect[i];
+			final Rect rect = mSectionLabelRect[i];
 			if(!rect.isEmpty()) {
 				String labelText = mAdapter.getLabelText(i);
 				Drawable[] drawables = obtainLabelDrawable();
+				int textLeft = rect.left;
+				int textTop = rect.top;
+				if(!mLabelTextMargin.isEmpty()) {
+					textLeft += mLabelTextMargin.left;
+					textTop += mLabelTextMargin.top;
+					
+				}
 				if(drawables!=null && drawables.length>1) {
+					
 					Drawable backgroundDrawable = drawables[0];
-					backgroundDrawable.setBounds(rect.left, rect.top, rect.right + mHorizontalSpacing, rect.bottom);
+					if(!mLabelBackgroundDrawableOffset.isEmpty()) {
+						Rect backgroundRect = new Rect();
+						backgroundRect.top = rect.top + mLabelBackgroundDrawableOffset.top;
+						backgroundRect.left = rect.left + mLabelBackgroundDrawableOffset.left;
+						backgroundRect.bottom = mLabelBackgroundDrawableOffset.bottom > 0 ? rect.top + mLabelBackgroundDrawableOffset.bottom : rect.bottom;
+						backgroundRect.right = mLabelBackgroundDrawableOffset.right > 0 ? rect.left + mLabelBackgroundDrawableOffset.right : rect.right;
+						backgroundDrawable.setBounds(backgroundRect);
+					} else {
+						backgroundDrawable.setBounds(rect);
+					}
+					
 					backgroundDrawable.draw(canvas);
+					
 					Drawable labelDrawable = drawables[1];
-					labelDrawable.setBounds(rect);
+					Rect labelRect;
+					if(!mLabelDrawableOffset.isEmpty()) {
+						labelRect = new Rect();
+						labelRect.top = rect.top + mLabelDrawableOffset.top;
+						labelRect.left = rect.left + mLabelDrawableOffset.left;
+						labelRect.bottom = mLabelDrawableOffset.bottom > 0 ? rect.top + mLabelDrawableOffset.bottom : rect.bottom;
+						labelRect.right = mLabelDrawableOffset.right > 0 ? rect.left + mLabelDrawableOffset.right : rect.right;
+					} else {
+						labelRect = rect;
+					}
+					textLeft = textLeft - rect.left + labelRect.left;
+					textTop = textTop -rect.top + labelRect.top;
+					// Ensure that label is large enough to hold the text.
+					if(!mLabelTextMargin.isEmpty()) {
+						int textHorizontalSpace = mLabelTextMargin.left + mMinSingleTextWidth + mLabelTextMargin.right;
+						int textVerticalSpace = mLabelTextMargin.top + (mMinSingleTextHeight + mMinSingleTextHeight / 4) * labelText.length() + mLabelTextMargin.bottom;
+						labelRect.right = labelRect.right >= labelRect.left + textHorizontalSpace ? labelRect.right : labelRect.left +textHorizontalSpace;
+						labelRect.bottom = labelRect.bottom >= labelRect.top + textVerticalSpace ? labelRect.bottom : labelRect.top + textVerticalSpace;
+					}
+					labelDrawable.setBounds(labelRect);
 					labelDrawable.draw(canvas);
 				}
-				canvas.drawText(labelText, rect.left+10, rect.top+20, new Paint());
+				
+				for(int j=0; j<labelText.length(); j++) {
+					canvas.drawText(labelText, j, j+1, textLeft, textTop, mLabelTextPaint);
+					textTop += mMinSingleTextHeight + mMinSingleTextHeight /5;
+				}
 			}
 		}
 		
@@ -1399,7 +1582,7 @@ public class HGridView extends AdapterView<HGridAdapter> {
             }
             setSelectedPositionInt(INVALID_POSITION);
             setNextSelectedPositionInt(INVALID_POSITION);
-            mSelectedTop = 0;
+//            mSelectedTop = 0;
             mSelectorRect.setEmpty();
         }
     }
@@ -1416,11 +1599,60 @@ public class HGridView extends AdapterView<HGridAdapter> {
 		mRows = rows;
 	}
 	
+	public int getRows() {
+		return mRows;
+	}
+	
 	public void setLabelDrawableResId(int resId) {
 		mLabelDrawableResId = resId;
 	}
+	
 	public void setLabelBackgroundDrawableResId(int resId) {
 		mLabelBackgroundDrawableResId = resId;
+	}
+	
+	public void setLabelDrawableOffset(int left, int top, int right, int bottom) {
+		mLabelDrawableOffset.set(left, top, right, bottom);
+	}
+	
+	public void setLabelBackgroundDrawableOffset(int left, int top, int right, int bottom) {
+		mLabelBackgroundDrawableOffset.set(left, top, right, bottom);
+	}
+	
+	public void setLabelTextPaint(Paint paint) {
+		
+		measureMinSingleTextDimension();
+		
+		mLabelTextPaint = paint;
+	}
+	
+	public void setLabelTextMargin(int left, int top, int right, int bottom) {
+		mLabelTextMargin.set(left, top, right, bottom);
+	}
+	
+	public void setOnScrollListener(OnScrollListener listener) {
+		mOnScrollListener = listener;
+	}
+	
+	private void measureMinSingleTextDimension() {
+		
+		if(mAdapter!=null && mAdapter.hasSection() && mLabelTextPaint!=null) {
+			long startTime = System.currentTimeMillis();
+			Rect measureRect = new Rect();
+			for(int i=0; i<mAdapter.getTotalSectionNum(); i++) {
+				String text = mAdapter.getLabelText(i);
+				if(!TextUtils.isEmpty(text)) {
+					for(int j=0; j<text.length(); j++) {
+						mLabelTextPaint.getTextBounds(text, j, j+1, measureRect);
+						mMinSingleTextHeight = Math.max(mMinSingleTextHeight, measureRect.bottom - measureRect.top);
+						mMinSingleTextWidth = Math.max(mMinSingleTextWidth, measureRect.right - measureRect.left);
+					}
+				}
+			}
+			long timeCost = System.currentTimeMillis() - startTime;
+			Log.d(TAG, "time cost :" + timeCost);
+			Log.d(TAG, "min dimension is " +"w:"+ mMinSingleTextWidth + " h:" +mMinSingleTextHeight);
+		}
 	}
 	
     public void dispatchStartTemporaryDetach(View child) {
@@ -1447,8 +1679,6 @@ public class HGridView extends AdapterView<HGridAdapter> {
 	
 	public static class LayoutParams extends ViewGroup.LayoutParams {
 		
-		public boolean mIsSeparator = false;
-
 		public LayoutParams(Context arg0, AttributeSet arg1) {
 			super(arg0, arg1);
 			// TODO Auto-generated constructor stub
@@ -1587,12 +1817,88 @@ public class HGridView extends AdapterView<HGridAdapter> {
 //		}
 	}
 	
+	protected void invokeOnScrollListener() {
+		if(mOnScrollListener!=null) {
+			mOnScrollListener.onScroll(this, mFirstPosition, getChildCount(), mAdapter.getCount());
+		}
+	}
+	
+	/**
+     * Interface definition for a callback to be invoked when the list or grid
+     * has been scrolled.
+     */
+	public interface OnScrollListener {
+		
+		/**
+         * The view is not scrolling. Note navigating the list using the trackball counts as
+         * being in the idle state since these transitions are not animated.
+         */
+        public static int SCROLL_STATE_IDLE = 0;
+
+        /**
+         * The user is scrolling using touch, and their finger is still on the screen
+         */
+        public static int SCROLL_STATE_TOUCH_SCROLL = 1;
+
+        /**
+         * The user had previously been scrolling using touch and had performed a fling. The
+         * animation is now coasting to a stop
+         */
+        public static int SCROLL_STATE_FLING = 2;
+
+        /**
+         * Callback method to be invoked while the grid view is being scrolled. If the
+         * view is being scrolled, this method will be called before the next frame of the scroll is
+         * rendered. In particular, it will be called before any calls to
+         * {@link Adapter#getView(int, View, ViewGroup)}.
+         *
+         * @param view The view whose scroll state is being reported
+         *
+         * @param scrollState The current scroll state. One of {@link #SCROLL_STATE_IDLE},
+         * {@link #SCROLL_STATE_TOUCH_SCROLL} or {@link #SCROLL_STATE_IDLE}.
+         */
+        public static int SCROLL_STATE_FOCUS_MOVING = 4;
+        public void onScrollStateChanged(HGridView view, int scrollState);
+
+        /**
+         * Callback method to be invoked when the list or grid has been scrolled. This will be
+         * called after the scroll has completed
+         * @param view The view whose scroll state is being reported
+         * @param firstVisibleItem the index of the first visible cell (ignore if
+         *        visibleItemCount == 0)
+         * @param visibleItemCount the number of visible cells
+         * @param totalItemCount the number of items in the list adaptor
+         */
+        public void onScroll(HGridView view, int firstVisibleItem, int visibleItemCount,
+                int totalItemCount);
+	}
+	
 	class AdapterDataSetObserver extends DataSetObserver {
 
 		@Override
 		public void onChanged() {
-			// TODO Auto-generated method stub
-			super.onChanged();
+			mDataChanged = true;
+			rememberSyncState();
+			mMaxColumn = getColumn(mAdapter.getCount() - 1);
+			
+			if(mAdapter.hasSection()) {
+				final int totalSectionNum = mAdapter.getTotalSectionNum();
+				mSectionFirstColumns = new int[totalSectionNum];
+				mSectionLastColumns = new int[totalSectionNum -1];
+				resetLabel();
+				mSectionLabelRect = new Rect[totalSectionNum];
+				int columnCount = 0;
+				for(int i=0; i<totalSectionNum; i++) {
+					mSectionLabelRect[i] = new Rect();
+					mSectionFirstColumns[i] = columnCount;
+					final int sectionCount = mAdapter.getSectionCount(i);
+					columnCount += (int)FloatMath.ceil((float)sectionCount / (float)mRows);
+					if(columnCount - 1 < mMaxColumn) {
+						mSectionLastColumns[i] = columnCount - 1;
+					}
+				}
+			}
+			requestLayout();
 		}
 
 		@Override
@@ -1602,5 +1908,128 @@ public class HGridView extends AdapterView<HGridAdapter> {
 		}
 		
 	}
+	
+	protected void rememberSyncState() {
+		if(getChildCount() > 0) {
+			mNeedSync = true;
+			if(mSelectedPosition >= 0) {
+				View v = getChildAt(mSelectedPosition - mFirstPosition);
+				if(v != null) {
+					mSpecificLeft = v.getLeft();
+				}
+				mSyncPosition = mNextSelectedPosition;
+				mSyncMode = SYNC_SELECTED_POSITION;
+			} else {
+				View v = getChildAt(0);
+				if(v != null) {
+					mSpecificLeft = v.getLeft();
+				}
+				mSyncPosition = mFirstPosition;
+				mSyncMode = SYNC_SELECTED_POSITION;
+			}
+		}
+	}
+	
+	protected void handleDataChanged() {
+		if(mNeedSync) {
+			switch(mSyncMode) {
+			case SYNC_SELECTED_POSITION:
+				mLayoutMode = LAYOUT_SYNC;
+				mSyncPosition = lookForSelectablePosition(mSyncPosition, true);
+				setNextSelectedPositionInt(mSyncPosition);
+				break;
+			case SYNC_FIRST_POSITION:
+				mLayoutMode = LAYOUT_SYNC;
+				mSyncPosition = Math.min(Math.max(mSyncPosition, 0), mAdapter.getCount() - 1);
+				break;
+			}
+		}
+	}
+	
+	protected void keyPressed() {
+		// We will support longClick in the future.
+		if(!isEnabled() || !isClickable()) {
+			return;
+		}
+		if(mSelector!=null && isFocused() && mSelectorRect != null && !mSelectorRect.isEmpty()) {
+			final View v = getChildAt(mSelectedPosition - mFirstPosition);
+			if(v!=null) {
+				if(v.hasFocusable()) return;
+				v.setPressed(true);
+			}
+			setPressed(true);
+		}
+	}
+	
+	private class SelectionNotifier implements Runnable {
 
+		@Override
+		public void run() {
+			if(mDataChanged) {
+				// Data has changed between when this SelectionNotifier
+                // was posted and now. We need to wait until the AdapterView
+                // has been synched to the new data.
+				if(mAdapter!=null) {
+					post(this);
+				}
+			} else {
+				fireOnSelected();
+			}
+		}
+		
+	}
+	
+	protected void selectionChanged() {
+		OnItemSelectedListener itemSelectedListener = getOnItemSelectedListener();
+        if (itemSelectedListener != null) {
+            if (isInLayout) {
+                // If we are in a layout traversal, defer notification
+                // by posting. This ensures that the view tree is
+                // in a consistent state and is able to accomodate
+                // new layout or invalidate requests.
+                if (mSelectionNotifier == null) {
+                    mSelectionNotifier = new SelectionNotifier();
+                }
+                post(mSelectionNotifier);
+            } else {
+                fireOnSelected();
+            }
+        }
+
+        // we fire selection events here not in View
+        if (mSelectedPosition != ListView.INVALID_POSITION && isShown() && !isInTouchMode()) {
+            sendAccessibilityEvent(AccessibilityEvent.TYPE_VIEW_SELECTED);
+        }
+    }
+	
+	private void fireOnSelected() {
+		OnItemSelectedListener itemSelectedListener = getOnItemSelectedListener();
+        if (itemSelectedListener == null)
+            return;
+
+        int selection = mNextSelectedPosition;
+        if (selection >= 0) {
+            View v = getSelectedView();
+            itemSelectedListener.onItemSelected(this, v, selection,
+                    getAdapter().getItemId(selection));
+        } else {
+        	itemSelectedListener.onNothingSelected(this);
+        }
+    }
+	
+	protected void checkSelectionChanged() {
+        if ((mSelectedPosition != mOldSelectedPosition)) {
+            selectionChanged();
+            mOldSelectedPosition = mSelectedPosition;
+        }
+    }
+	
+	private void checkScrollState(int newState) {
+		if(mScrollState != newState && mAdapter != null) {
+			if(mOnScrollListener!=null) {
+				mOnScrollListener.onScrollStateChanged(this, newState);
+			}
+			mScrollState = newState;
+		}
+	}
 }
