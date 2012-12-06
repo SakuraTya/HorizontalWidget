@@ -14,12 +14,12 @@ import android.graphics.drawable.ColorDrawable;
 import android.os.AsyncTask;
 import android.os.Bundle;
 import android.util.Log;
-import android.util.SparseArray;
 import android.view.View;
 import android.widget.AdapterView;
 import android.widget.AdapterView.OnItemClickListener;
 import android.widget.AdapterView.OnItemSelectedListener;
 import android.widget.GridView;
+import android.widget.TextView;
 
 public class MainActivity extends Activity implements OnItemClickListener, OnScrollListener, OnItemSelectedListener {
 
@@ -48,8 +48,8 @@ public class MainActivity extends Activity implements OnItemClickListener, OnScr
         buildHGridView();
         
 //        buildNormalGrid();
-        mSimulatorTask = new SimulatorTask();
-        mSimulatorTask.execute();
+//        mSimulatorTask = new SimulatorTask();
+//        mSimulatorTask.execute();
     }
 	
 	private void buildNormalGrid() {
@@ -81,7 +81,7 @@ public class MainActivity extends Activity implements OnItemClickListener, OnScr
         	ItemList item = new ItemList();
         	item.objects = new ArrayList<String>();
         	item.title = "section"+i;
-        	for(int j=0; j < 200; j++) {
+        	for(int j=0; j < 20; j++) {
         		item.objects.add("title: "+j);
         	}
         	mItemLists.add(item);
@@ -188,6 +188,9 @@ public class MainActivity extends Activity implements OnItemClickListener, OnScr
 	public void onItemSelected(AdapterView<?> parent, View view, int position,
 			long id) {
 		Log.d(TAG, "item "+ position + " selected");
+		TextView title = (TextView) view.findViewById(R.id.list_item_title);
+		String titleText = title.getText().toString();
+		Log.d(TAG, "item:"+position+" 's title is "+titleText);
 	}
 
 	@Override

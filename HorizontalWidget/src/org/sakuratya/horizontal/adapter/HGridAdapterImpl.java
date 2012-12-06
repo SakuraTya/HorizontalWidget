@@ -13,6 +13,7 @@ import android.util.SparseArray;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
+import android.widget.ImageView;
 import android.widget.TextView;
 
 public class HGridAdapterImpl extends HGridAdapter<ItemList> {
@@ -58,9 +59,11 @@ public class HGridAdapterImpl extends HGridAdapter<ItemList> {
 	public View getView(int position, View convertView, ViewGroup parent) {
 		Holder holder = null;
 		if(convertView == null) {
-			convertView = LayoutInflater.from(mContext).inflate(R.layout.item_view,null);
+			convertView = LayoutInflater.from(mContext).inflate(R.layout.list_view_item,null);
 			holder = new Holder();
-			holder.title = (TextView) convertView.findViewById(R.id.item_title);
+			holder.title = (TextView) convertView.findViewById(R.id.list_item_title);
+			holder.preview = (ImageView) convertView.findViewById(R.id.list_item_preview_img);
+			holder.quality = (ImageView) convertView.findViewById(R.id.list_item_quality_label);
 			convertView.setTag(holder);
 		} else {
 			holder = (Holder) convertView.getTag();
@@ -89,6 +92,8 @@ public class HGridAdapterImpl extends HGridAdapter<ItemList> {
 	
 	static class Holder {
 		TextView title;
+		ImageView preview;
+		ImageView quality;
 	}
 
 	@Override
@@ -116,7 +121,7 @@ public class HGridAdapterImpl extends HGridAdapter<ItemList> {
 			int size = item.objects.size();
 			item.objects = new ArrayList<String>();
 			for(int k=0; k<size; k++) {
-				item.objects.add(additionStr+"\n Object: " + k + "\n Section: "+j);
+				item.objects.add(additionStr+" Object: " + k + " Section: "+j);
 			}
 			
 		}
