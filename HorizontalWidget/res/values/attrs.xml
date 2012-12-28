@@ -3,6 +3,7 @@
     <declare-styleable name="HGridView">
         <attr name="horizontalSpacing" format="dimension"/>
         <attr name="verticalSpacing" format="dimension"/>
+        <attr name="sectionExtraSpacing" format="dimension"/>
         <attr name="rowHeight" format="dimension"/>
         <attr name="numRows" format="integer"/>
         <attr name="labelDrawable" format="integer"/>
