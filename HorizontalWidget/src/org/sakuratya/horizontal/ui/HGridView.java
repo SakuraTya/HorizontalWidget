@@ -1370,22 +1370,24 @@ public class HGridView extends AdapterView<HGridAdapter> {
 	@Override
 	protected void dispatchDraw(Canvas canvas) {
 		if(mAdapter!=null && mAdapter.hasSection() && getChildCount() > 0) {
-			drawSectionLabels(canvas);
+			if(setDrawableSectionLabelRects(canvas)) {
+				drawSectionLabels(canvas, mSectionLabelRect);
+			}
 		}
 		drawSelector(canvas);
 		super.dispatchDraw(canvas);
 	}
 	
-	/**
-	 * Draw section labels.
-	 * @param canvas
-	 */
-	protected void drawSectionLabels(Canvas canvas) {
+	private boolean setDrawableSectionLabelRects(Canvas canvas) {
 		final int firstPosition = mFirstPosition;
 		final int firstVisibleColumn = getColumn(mFirstPosition);
 		final int lastVisibleColumn = getColumn(mFirstPosition + getChildCount() - 1);
 		final int leftBound = mListPadding.left;
 		final int rightBound = getRight() - mListPadding.right;
+		final int horizontalSpacing = mHorizontalSpacing;
+		final int sectionExtraSpacing = mSectionExtraSpacing;
+		final int verticalSpacing = mVerticalSpacing;
+		boolean hasLabelToDraw = false;
 		// look up all visible column on screen. check if it is in the mSectionFirstColumns
 		// or mSectionLastColumns.
 		for(int i=firstVisibleColumn; i<=lastVisibleColumn; i++) {
@@ -1400,10 +1402,11 @@ public class HGridView extends AdapterView<HGridAdapter> {
 					// only if the left edge of referenceView is on screen, we will draw
 					// its label before it.
 					if(referenceView.getLeft() > leftBound) {
-						rect.top = mListPadding.top + mVerticalSpacing;
+						rect.top = mListPadding.top + verticalSpacing;
 						rect.right = referenceView.getLeft();
-						rect.left = rect.right - mHorizontalSpacing;
+						rect.left = rect.right - (horizontalSpacing + sectionExtraSpacing);
 						rect.bottom = getBottom() - mListPadding.bottom;
+						hasLabelToDraw = true;
 					}
 				}
 			}
@@ -1416,21 +1419,30 @@ public class HGridView extends AdapterView<HGridAdapter> {
 					final int columnStart = getPositionRangeByColumn(i)[0];
 					final View referenceView = getChildAt(columnStart - firstPosition);
 					if(referenceView.getRight() < rightBound) {
-						rect.top = mListPadding.top + mVerticalSpacing;
+						rect.top = mListPadding.top + verticalSpacing;
 						rect.left = referenceView.getRight();
-						rect.right = rect.left + mHorizontalSpacing;
+						rect.right = rect.left + (horizontalSpacing + sectionExtraSpacing);
 						rect.bottom = getBottom() - mListPadding.bottom;
+						hasLabelToDraw = true;
 					}
 				}
 			}
 		}
+		return hasLabelToDraw;
+	}
+	
+	/**
+	 * Draw section labels.
+	 * @param canvas
+	 */
+	protected void drawSectionLabels(Canvas canvas, Rect[] sectionLabelRect) {
 		
 		if(mLabelTextPaint==null) {
 			mLabelTextPaint = new Paint();
 		}
 		
-		for(int i=0; i< mSectionLabelRect.length; i++) {
-			final Rect rect = mSectionLabelRect[i];
+		for(int i=0; i< sectionLabelRect.length; i++) {
+			final Rect rect = sectionLabelRect[i];
 			if(!rect.isEmpty()) {
 				String labelText = mAdapter.getLabelText(i);
 				Drawable[] drawables = obtainLabelDrawable();
@@ -1490,9 +1502,8 @@ public class HGridView extends AdapterView<HGridAdapter> {
 			}
 		}
 		
-		// Test purpose
-//		Log.d(TAG, "mScrapDrawables size = " + mRecycler.mScrapDrawables.size());
 	}
+	
 	
 	private Drawable[] obtainLabelDrawable() {
 		Drawable[] drawables =  new Drawable[2];
@@ -1713,8 +1724,16 @@ public class HGridView extends AdapterView<HGridAdapter> {
 		mLabelDrawableResId = resId;
 	}
 	
+	public int getLabelDrawableResId() {
+		return mLabelDrawableResId;
+	}
+	
 	public void setLabelBackgroundDrawableResId(int resId) {
 		mLabelBackgroundDrawableResId = resId;
+	}
+	
+	public int getLabelBackgroundDrawableResId() {
+		return mLabelBackgroundDrawableResId;
 	}
 	
 	public void setLabelDrawableOffset(int left, int top, int right, int bottom) {
@@ -1732,8 +1751,16 @@ public class HGridView extends AdapterView<HGridAdapter> {
 		mLabelTextPaint = paint;
 	}
 	
+	public Paint getLabelTextPaint() {
+		return mLabelTextPaint;
+	}
+	
 	public void setLabelTextMargin(int left, int top, int right, int bottom) {
 		mLabelTextMargin.set(left, top, right, bottom);
+	}
+	
+	public Rect getLabelTextMargin() {
+		return mLabelTextMargin;
 	}
 	
 	public void setOnScrollListener(OnScrollListener listener) {
