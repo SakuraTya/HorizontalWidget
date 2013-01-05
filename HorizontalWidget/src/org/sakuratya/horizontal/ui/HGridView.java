@@ -178,7 +178,7 @@ public class HGridView extends AdapterView<HGridAdapter> {
 //		setFocusable(true);
 		setClickable(true);
         setFocusableInTouchMode(true);
-		setHorizontalFadingEdgeEnabled(true);
+//		setHorizontalFadingEdgeEnabled(true);
 	}
 	
 	private void initView(Context context, AttributeSet attrs) {
@@ -228,6 +228,13 @@ public class HGridView extends AdapterView<HGridAdapter> {
 		int labelTextMarginRight = a.getDimensionPixelOffset(R.styleable.HGridView_labelTextMarginRight, 0);
 		int labelTextMarginBottom = a.getDimensionPixelOffset(R.styleable.HGridView_labelTextMarginBottom, 0);
 		setLabelTextMargin(labelTextMarginLeft, labelTextMarginTop, labelTextMarginRight, labelTextMarginBottom);
+		
+		boolean isHorizontalFadingEdgeEnabled = a.getBoolean(R.styleable.HGridView_enableFadingEdge, false);
+		setHorizontalFadingEdgeEnabled(isHorizontalFadingEdgeEnabled);
+		int horizontalFadingLength = a.getDimensionPixelOffset(R.styleable.HGridView_horizontalFadeLength, 0);
+		if(isHorizontalFadingEdgeEnabled) {
+			setFadingEdgeLength(horizontalFadingLength);
+		}
 		a.recycle();
 		
 	}
@@ -239,6 +246,7 @@ public class HGridView extends AdapterView<HGridAdapter> {
 
 	@Override
 	public void setAdapter(HGridAdapter adapter) {
+		Log.d(TAG, "isHorizontalFadingEdgeEnabled: " + isHorizontalFadingEdgeEnabled());
 		if(mAdapter!=null) {
 			mAdapter.unregisterDataSetObserver(mDataSetObserver);
 		}
@@ -252,7 +260,7 @@ public class HGridView extends AdapterView<HGridAdapter> {
 			mDataSetObserver = new AdapterDataSetObserver();
 			mAdapter.registerDataSetObserver(mDataSetObserver);
 			mMaxColumn = getColumn(mAdapter.getCount() - 1);
-			
+			checkFocus();
 			if(mAdapter.hasSection()) {
 				final int totalSectionNum = mAdapter.getTotalSectionNum();
 				mSectionFirstColumns = new int[totalSectionNum];
@@ -276,6 +284,7 @@ public class HGridView extends AdapterView<HGridAdapter> {
 			setNextSelectedPositionInt(position);
 			checkSelectionChanged();
 		} else {
+			checkFocus();
 			checkSelectionChanged();
 		}
 		requestLayout();
@@ -419,9 +428,9 @@ public class HGridView extends AdapterView<HGridAdapter> {
 		View after;
 		boolean isSectionFirst = Arrays.binarySearch(mSectionFirstColumns, motionCol) >= 0;
 		boolean isSectionLast = Arrays.binarySearch(mSectionLastColumns, motionCol) >= 0;
-		before = fillLeft(motionCol - 1, referenceView.getLeft() - (isSectionFirst ? horizontalSpacing : (horizontalSpacing + sectionExtraSpacing)));
+		before = fillLeft(motionCol - 1, referenceView.getLeft() - (isSectionFirst ? (horizontalSpacing + sectionExtraSpacing) : horizontalSpacing));
 		adjustViewLeftAndRight();
-		after = fillRight(motionCol + 1, referenceView.getRight() + (isSectionLast ? horizontalSpacing : (horizontalSpacing + sectionExtraSpacing)));
+		after = fillRight(motionCol + 1, referenceView.getRight() + (isSectionLast ? (horizontalSpacing + sectionExtraSpacing) : horizontalSpacing));
 		// Check if we have dragged the right end of the grid too left. 
 		final int childCount = getChildCount();
 		if(childCount > 0) {
@@ -1057,7 +1066,7 @@ public class HGridView extends AdapterView<HGridAdapter> {
 		if(mDataChanged) {
 			layoutChildren();
 		}
-		Log.d(TAG, "KeyCode: "+keyCode);
+//		Log.d(TAG, "KeyCode: "+keyCode);
 		final int action = event.getAction();
 		boolean handled = false;
 		if(action!=KeyEvent.ACTION_UP) {
@@ -1767,26 +1776,26 @@ public class HGridView extends AdapterView<HGridAdapter> {
 		mOnScrollListener = listener;
 	}
 	
-	private void measureMinSingleTextDimension() {
-		
-		if(mAdapter!=null && mAdapter.hasSection() && mLabelTextPaint!=null) {
-			long startTime = System.currentTimeMillis();
-			Rect measureRect = new Rect();
-			for(int i=0; i<mAdapter.getTotalSectionNum(); i++) {
-				String text = mAdapter.getLabelText(i);
-				if(!TextUtils.isEmpty(text)) {
-					for(int j=0; j<text.length(); j++) {
-						mLabelTextPaint.getTextBounds(text, j, j+1, measureRect);
-						mMinSingleTextHeight = Math.max(mMinSingleTextHeight, measureRect.bottom - measureRect.top);
-						mMinSingleTextWidth = Math.max(mMinSingleTextWidth, measureRect.right - measureRect.left);
-					}
-				}
-			}
-			long timeCost = System.currentTimeMillis() - startTime;
-			Log.d(TAG, "time cost :" + timeCost);
-			Log.d(TAG, "min dimension is " +"w:"+ mMinSingleTextWidth + " h:" +mMinSingleTextHeight);
-		}
-	}
+//	private void measureMinSingleTextDimension() {
+//		
+//		if(mAdapter!=null && mAdapter.hasSection() && mLabelTextPaint!=null) {
+//			long startTime = System.currentTimeMillis();
+//			Rect measureRect = new Rect();
+//			for(int i=0; i<mAdapter.getTotalSectionNum(); i++) {
+//				String text = mAdapter.getLabelText(i);
+//				if(!TextUtils.isEmpty(text)) {
+//					for(int j=0; j<text.length(); j++) {
+//						mLabelTextPaint.getTextBounds(text, j, j+1, measureRect);
+//						mMinSingleTextHeight = Math.max(mMinSingleTextHeight, measureRect.bottom - measureRect.top);
+//						mMinSingleTextWidth = Math.max(mMinSingleTextWidth, measureRect.right - measureRect.left);
+//					}
+//				}
+//			}
+//			long timeCost = System.currentTimeMillis() - startTime;
+//			Log.d(TAG, "time cost :" + timeCost);
+//			Log.d(TAG, "min dimension is " +"w:"+ mMinSingleTextWidth + " h:" +mMinSingleTextHeight);
+//		}
+//	}
 	
     public void dispatchStartTemporaryDetach(View child) {
     	child.onStartTemporaryDetach();
@@ -1980,17 +1989,10 @@ public class HGridView extends AdapterView<HGridAdapter> {
         public static int SCROLL_STATE_FLING = 2;
 
         /**
-         * Callback method to be invoked while the grid view is being scrolled. If the
-         * view is being scrolled, this method will be called before the next frame of the scroll is
-         * rendered. In particular, it will be called before any calls to
-         * {@link Adapter#getView(int, View, ViewGroup)}.
-         *
-         * @param view The view whose scroll state is being reported
-         *
-         * @param scrollState The current scroll state. One of {@link #SCROLL_STATE_IDLE},
-         * {@link #SCROLL_STATE_TOUCH_SCROLL} or {@link #SCROLL_STATE_IDLE}.
+         * The user is pressing an arrow key to move the selection and has not released yet.
          */
         public static int SCROLL_STATE_FOCUS_MOVING = 4;
+        
         public void onScrollStateChanged(HGridView view, int scrollState);
 
         /**
@@ -2174,6 +2176,17 @@ public class HGridView extends AdapterView<HGridAdapter> {
 			}
 			mScrollState = newState;
 		}
+	}
+	
+	protected void checkFocus() {
+		final HGridAdapter adapter = getAdapter();
+        final boolean empty = adapter == null || adapter.getCount() == 0;
+        final boolean focusable = !empty;
+        // The order in which we set focusable in touch mode/focusable may matter
+        // for the client, see View.setFocusableInTouchMode() comments for more
+        // details
+//        super.setFocusableInTouchMode(focusable);
+        super.setFocusable(focusable);
 	}
 	
 	public boolean pageScroll(int direction) {

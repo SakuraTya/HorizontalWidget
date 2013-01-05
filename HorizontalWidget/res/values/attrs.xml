@@ -23,5 +23,7 @@
         <attr name="labelTextMarginLeft" format="dimension"/>
         <attr name="labelTextMarginRight" format="dimension"/>
         <attr name="labelTextMarginBottom" format="dimension"/>
+        <attr name="enableFadingEdge" format="boolean"/>
+        <attr name="horizontalFadeLength" format="dimension"/>
     </declare-styleable>
 </resources>
