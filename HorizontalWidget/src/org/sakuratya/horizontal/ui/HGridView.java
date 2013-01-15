@@ -134,6 +134,8 @@ public class HGridView extends AdapterView<HGridAdapter> {
     
     private int mLabelDrawableResId;
     private int mLabelBackgroundDrawableResId;
+    
+    private Drawable[] mLabelDrawables;
 
 	private Rect mTempRect = new Rect();
 	
@@ -193,7 +195,7 @@ public class HGridView extends AdapterView<HGridAdapter> {
 		int labelDrawableResId = a.getResourceId(R.styleable.HGridView_labelDrawable, 0);
 		setLabelDrawableResId(labelDrawableResId);
 		int labelBackgroundDrawableResId = a.getResourceId(R.styleable.HGridView_labelBackgroundDrawable, 0);
-		setLabelBackgroundDrawableResId(labelBackgroundDrawableResId);
+		setLabelBackgroundDrawableResId(labelBackgroundDrawableResId);		
 		int rowHeight = a.getDimensionPixelOffset(R.styleable.HGridView_rowHeight, -1);
 		if(rowHeight > 0) {
 			setRowHeight(rowHeight);
@@ -1449,65 +1451,74 @@ public class HGridView extends AdapterView<HGridAdapter> {
 		if(mLabelTextPaint==null) {
 			mLabelTextPaint = new Paint();
 		}
+		if(mLabelDrawables == null) {
+			mLabelDrawables = obtainLabelDrawable();
+		}
 		
 		for(int i=0; i< sectionLabelRect.length; i++) {
 			final Rect rect = sectionLabelRect[i];
 			if(!rect.isEmpty()) {
 				String labelText = mAdapter.getLabelText(i);
-				Drawable[] drawables = obtainLabelDrawable();
+//				Drawable[] drawables = obtainLabelDrawable();
 				int textLeft = rect.left;
 				int textTop = rect.top;
 				if(!mLabelTextMargin.isEmpty()) {
 					textLeft += mLabelTextMargin.left;
 					textTop += mLabelTextMargin.top;
-					
 				}
-				if(drawables!=null && drawables.length>1) {
+				if(mLabelDrawables!=null && mLabelDrawables.length>1) {
 					
-					Drawable backgroundDrawable = drawables[0];
-					Rect backgroundRect = new Rect();
-					backgroundRect.top = rect.top + mLabelBackgroundDrawableOffset.top;
-					backgroundRect.left = rect.left + mLabelBackgroundDrawableOffset.left;
-					backgroundRect.bottom = mLabelBackgroundDrawableOffset.bottom > 0 ? rect.top + mLabelBackgroundDrawableOffset.bottom : rect.bottom;
-					backgroundRect.right = mLabelBackgroundDrawableOffset.right > 0 ? rect.left + mLabelBackgroundDrawableOffset.right : rect.right;
-					backgroundDrawable.setBounds(backgroundRect);
+					Drawable backgroundDrawable = mLabelDrawables[0];
+					if(backgroundDrawable!=null) {
+						Rect backgroundRect = new Rect();
+						backgroundRect.top = rect.top + mLabelBackgroundDrawableOffset.top;
+						backgroundRect.left = rect.left + mLabelBackgroundDrawableOffset.left;
+						backgroundRect.bottom = mLabelBackgroundDrawableOffset.bottom > 0 ? rect.top + mLabelBackgroundDrawableOffset.bottom : rect.bottom;
+						backgroundRect.right = mLabelBackgroundDrawableOffset.right > 0 ? rect.left + mLabelBackgroundDrawableOffset.right : rect.right;
+						backgroundDrawable.setBounds(backgroundRect);
+						
+						backgroundDrawable.draw(canvas);
+					}
+					Drawable labelDrawable = mLabelDrawables[1];
 					
-					backgroundDrawable.draw(canvas);
-					
-					Drawable labelDrawable = drawables[1];
 					Rect labelRect;
 					labelRect = new Rect();
 					labelRect.top = rect.top + mLabelDrawableOffset.top;
 					labelRect.left = rect.left + mLabelDrawableOffset.left;
 					labelRect.bottom = mLabelDrawableOffset.bottom > 0 ? rect.top + mLabelDrawableOffset.bottom : rect.bottom;
 					labelRect.right = mLabelDrawableOffset.right > 0 ? rect.left + mLabelDrawableOffset.right : rect.right;
-					textLeft = textLeft - rect.left + labelRect.left;
-					textTop = textTop -rect.top + labelRect.top;
-					// Ensure that label is large enough to hold the text.
-					int height = 0;
-					for(int j=0; j< labelText.length(); j++) {
-						mLabelTextPaint.getTextBounds(labelText, j, j+1, mTempRect);
-						height += mTempRect.bottom - mTempRect.top;
-						mMinSingleTextWidth = Math.max(mMinSingleTextWidth, mTempRect.right - mTempRect.left);
+					if(labelText != null) {
+						textLeft = textLeft - rect.left + labelRect.left;
+						textTop = textTop -rect.top + labelRect.top;
+						// Ensure that label is large enough to hold the text.
+						int height = 0;
+						for(int j=0; j< labelText.length(); j++) {
+							mLabelTextPaint.getTextBounds(labelText, j, j+1, mTempRect);
+							height += mTempRect.bottom - mTempRect.top;
+							mMinSingleTextWidth = Math.max(mMinSingleTextWidth, mTempRect.right - mTempRect.left);
+						}
+						mMinSingleTextHeight = height / labelText.length();
+						
+						Log.d(TAG, "labelRect: " + labelRect.toString());
+						int textHorizontalSpace = mLabelTextMargin.left + mMinSingleTextWidth + mLabelTextMargin.right;
+						int textVerticalSpace = mLabelTextMargin.top + (mMinSingleTextHeight + mMinSingleTextHeight / 2) * labelText.length() + mLabelTextMargin.bottom;
+						labelRect.right = labelRect.right >= labelRect.left + textHorizontalSpace ? labelRect.right : labelRect.left +textHorizontalSpace;
+						labelRect.bottom = labelRect.bottom >= labelRect.top + textVerticalSpace ? labelRect.bottom : labelRect.top + textVerticalSpace;
 					}
-					mMinSingleTextHeight = height / labelText.length();
-					
 					Log.d(TAG, "labelRect: " + labelRect.toString());
-					int textHorizontalSpace = mLabelTextMargin.left + mMinSingleTextWidth + mLabelTextMargin.right;
-					int textVerticalSpace = mLabelTextMargin.top + (mMinSingleTextHeight + mMinSingleTextHeight / 2) * labelText.length() + mLabelTextMargin.bottom;
-					labelRect.right = labelRect.right >= labelRect.left + textHorizontalSpace ? labelRect.right : labelRect.left +textHorizontalSpace;
-					labelRect.bottom = labelRect.bottom >= labelRect.top + textVerticalSpace ? labelRect.bottom : labelRect.top + textVerticalSpace;
-					Log.d(TAG, "labelRect: " + labelRect.toString());
-					labelDrawable.setBounds(labelRect);
-					labelDrawable.draw(canvas);
+					if(labelDrawable != null) {
+						labelDrawable.setBounds(labelRect);
+						labelDrawable.draw(canvas);
+					}
 				}
-				textTop += 40;
-				textLeft += 7;
-				for(int j=0; j<labelText.length(); j++) {
-					canvas.drawText(labelText, j, j+1, textLeft, textTop, mLabelTextPaint);
-					textTop += mMinSingleTextHeight + mMinSingleTextHeight /2;
+				if(labelText != null) {
+					textTop += 40;
+					textLeft += 7;
+					for(int j=0; j<labelText.length(); j++) {
+						canvas.drawText(labelText, j, j+1, textLeft, textTop, mLabelTextPaint);
+						textTop += mMinSingleTextHeight + mMinSingleTextHeight /2;
+					}
 				}
-				
 			}
 		}
 		
@@ -1517,9 +1528,13 @@ public class HGridView extends AdapterView<HGridAdapter> {
 	private Drawable[] obtainLabelDrawable() {
 		Drawable[] drawables =  new Drawable[2];
 		// label background drawable
-		drawables[0] = getResources().getDrawable(mLabelBackgroundDrawableResId);
+		if(mLabelBackgroundDrawableResId != 0) {
+			drawables[0] = getResources().getDrawable(mLabelBackgroundDrawableResId);
+		}
 		// label drawable
-		drawables[1] = getResources().getDrawable(mLabelDrawableResId);
+		if(mLabelDrawableResId != 0) {
+			drawables[1] = getResources().getDrawable(mLabelDrawableResId);
+		}
 		return drawables;
 	}
 	
