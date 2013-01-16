@@ -612,9 +612,6 @@ public class HGridView extends AdapterView<HGridAdapter> {
 		int oldCol = getColumn(selectedPosition);
 		int col = getColumn(nextSelectedPosition);
 		
-		boolean isOldColSectionFirst = Arrays.binarySearch(mSectionFirstColumns, oldCol) >= 0;
-		boolean isOldColSectionLast = Arrays.binarySearch(mSectionLastColumns, oldCol) >= 0;
-		
 		mFirstPosition = getPositionRangeByColumn(col)[0];
 		int colDelta = col - oldCol;
 		final int leftSelectionPixel = getLeftSelectionPixel(childrenLeft, fadingEdgeLength, col);
@@ -624,8 +621,14 @@ public class HGridView extends AdapterView<HGridAdapter> {
 			 * Case 1: Scrolling Right
 			 */
 			final int oldRight = mReferenceViewInSelectedColumn == null ? 0: mReferenceViewInSelectedColumn.getRight();
-			
-			selectedView = makeColumn(col, oldRight + (isOldColSectionLast ? (sectionExtraSpacing + horizontalSpacing) : horizontalSpacing), true);
+			final int width = mReferenceViewInSelectedColumn == null ? 0: mReferenceViewInSelectedColumn.getWidth();
+			// disabled child may cause skip multiple columns.
+			int offset = width * (colDelta - 1);
+			for(int i=0; i < colDelta; i++) {
+				boolean isOldColSectionLast = Arrays.binarySearch(mSectionLastColumns, oldCol+i) >= 0;
+				offset += (isOldColSectionLast ? (sectionExtraSpacing + horizontalSpacing) : horizontalSpacing);
+			}
+			selectedView = makeColumn(col, oldRight + offset, true);
 			referenceView = mReferenceView;
 			adjustForRightFadingEdge(referenceView, leftSelectionPixel, rightSelectionPixel);
 		} else if(colDelta < 0) {
@@ -633,8 +636,13 @@ public class HGridView extends AdapterView<HGridAdapter> {
 			 * Case 2: Scrolling Left
 			 */
 			final int oldLeft = mReferenceViewInSelectedColumn == null ? 0: mReferenceViewInSelectedColumn.getLeft();
-			
-			selectedView = makeColumn(col, oldLeft - (isOldColSectionFirst ? (sectionExtraSpacing + horizontalSpacing) : horizontalSpacing), false);
+			final int width = mReferenceViewInSelectedColumn == null ? 0: mReferenceViewInSelectedColumn.getWidth();
+			int offset = width * (-colDelta - 1);
+			for(int i=0; i < -colDelta; i++) {
+				boolean isOldColSectionFirst = Arrays.binarySearch(mSectionFirstColumns, oldCol-i) >= 0;
+				offset += isOldColSectionFirst ? (sectionExtraSpacing + horizontalSpacing) : horizontalSpacing;
+			}
+			selectedView = makeColumn(col, oldLeft - offset, false);
 			referenceView = mReferenceView;
 			adjustForLeftFadingEdge(referenceView, leftSelectionPixel, rightSelectionPixel);
 		} else {
@@ -1196,11 +1204,50 @@ public class HGridView extends AdapterView<HGridAdapter> {
 			if(currentSelectedColumn<=0) {
 				return INVALID_POSITION;
 			}
-			final int currentSelectedRow =selectedPosition==INVALID_POSITION ? 0 : getRow(selectedPosition);
-			int[] positionRange = getPositionRangeByColumn(currentSelectedColumn - 1);
-			// If next column has less rows than currentSelectedRow, just return the last row of next column. 
-			return currentSelectedRow > positionRange[1] - positionRange[0] ? positionRange[1] : positionRange[0] + currentSelectedRow;
-			
+			final int currentSelectedRow =selectedPosition==INVALID_POSITION ? 0 : getRow(selectedPosition);			
+			// targetRow may change if target column has no row matched.
+			int targetColumn = currentSelectedColumn - 1;
+			while(targetColumn >= 0){
+				int targetRow = currentSelectedRow;
+				int[] positionRange = getPositionRangeByColumn(targetColumn);
+				// If target column has less rows than current, just return the last row if possible.
+				if(targetRow > positionRange[1] - positionRange[0]) {
+					targetRow = positionRange[1] - positionRange[0];
+				}
+				// We walk through up and down the target column rows from targetRow.
+				int targetRowDiffUp = -1;
+				int targetRowDiffDown = -1;
+				for(int row = targetRow; row >= 0; row--) {
+					int pos = positionRange[0] + row;
+					if(mAdapter.isEnabled(pos)) {
+						targetRowDiffUp = targetRow - row;
+						break;
+					}
+				}
+				for(int row = targetRow + 1; row <= positionRange[1] - positionRange[0]; row++) {
+					int pos = positionRange[0] + row;
+					if(mAdapter.isEnabled(pos)){
+						targetRowDiffDown = row - targetRow;
+						break;
+					}
+				}
+				// If both two diff is available, we use the smaller diff.
+				if(targetRowDiffDown != -1 && targetRowDiffUp != -1) {
+					if(targetRowDiffUp <= targetRowDiffUp) {
+						return targetRow - targetRowDiffUp + positionRange[0];
+					} else if(targetRowDiffDown < targetRowDiffUp) {
+						return targetRow + targetRowDiffDown + positionRange[0];
+					}
+				// Otherwise use the available one.
+				} else if(targetRowDiffDown == -1 && targetRowDiffUp != -1) {
+					return targetRow - targetRowDiffUp + positionRange[0];
+				} else if(targetRowDiffUp == -1 && targetRowDiffDown != -1) {
+					return targetRow + targetRowDiffDown + positionRange[0];
+				}
+				// None of the rows is available. search the left column of target column.
+				targetColumn--;
+			}
+			return INVALID_POSITION;
 		} else if(direction==FOCUS_RIGHT) {
 			if(selectedPosition >= mAdapter.getCount() - 1) {
 				return INVALID_POSITION;
@@ -1210,31 +1257,73 @@ public class HGridView extends AdapterView<HGridAdapter> {
 				return INVALID_POSITION;
 			}
 			final int currentSelectedRow =selectedPosition==INVALID_POSITION ? 0 : getRow(selectedPosition);
-			int[] positionRange = getPositionRangeByColumn(currentSelectedColumn + 1);
-			// If next column has less rows than currentSelectedRow, just return the last row of next column. 
-			return currentSelectedRow > positionRange[1] - positionRange[0] ? positionRange[1] : positionRange[0] + currentSelectedRow;
+			// targetRow may change if target column has no row matched.
+			int targetColumn = currentSelectedColumn + 1;
+			while(targetColumn <= mMaxColumn){
+				int targetRow = currentSelectedRow;
+				int[] positionRange = getPositionRangeByColumn(targetColumn);
+				// If target column has less rows than current, just return the last row if possible.
+				if(targetRow > positionRange[1] - positionRange[0]) { 
+					targetRow = positionRange[1] - positionRange[0];
+				}
+				// We walk through up and down the target column rows from targetRow.
+				int targetRowDiffUp = -1;
+				int targetRowDiffDown = -1;
+				for(int row = targetRow; row >= 0; row--) {
+					int pos = positionRange[0] + row;
+					if(mAdapter.isEnabled(pos)) {
+						targetRowDiffUp = targetRow - row;
+						break;
+					}
+				}
+				for(int row = targetRow + 1; row <= positionRange[1] - positionRange[0]; row++) {
+					int pos = positionRange[0] + row;
+					if(mAdapter.isEnabled(pos)){
+						targetRowDiffDown = row - targetRow;
+						break;
+					}
+				}
+				// If both two diff is available, we use the smaller diff.
+				if(targetRowDiffDown != -1 && targetRowDiffUp != -1) {
+					if(targetRowDiffUp <= targetRowDiffUp) {
+						return targetRow - targetRowDiffUp + positionRange[0];
+					} else if(targetRowDiffDown < targetRowDiffUp) {
+						return targetRow + targetRowDiffDown + positionRange[0];
+					}
+				// Otherwise use the available one.
+				} else if(targetRowDiffDown == -1 && targetRowDiffUp != -1) {
+					return targetRow - targetRowDiffUp + positionRange[0];
+				} else if(targetRowDiffUp == -1 && targetRowDiffDown != -1) {
+					return targetRow + targetRowDiffDown + positionRange[0];
+				}
+				// None of the rows is available. search the left column of target column.
+				targetColumn++;
+			}
+			return INVALID_POSITION;
 		} else if(direction==FOCUS_UP) {
 			if(selectedPosition<= firstPosition) {
 				return INVALID_POSITION;
 			}
 			final int currentSelectedColumn = getColumn(selectedPosition);
-			final int nextSelectedColumn = getColumn(selectedPosition - 1);
-			if(nextSelectedColumn != currentSelectedColumn) {
-				return INVALID_POSITION;
-			} else {
-				return selectedPosition -1;
+			int[] positionRange = getPositionRangeByColumn(currentSelectedColumn);
+			for(int pos = selectedPosition - 1; pos >= positionRange[0]; pos--) {
+				if(mAdapter.isEnabled(pos)) {
+					return pos;
+				}
 			}
+			return INVALID_POSITION;
 		} else {
 			if(selectedPosition >= mAdapter.getCount() - 1) {
 				return INVALID_POSITION;
 			}
 			final int currentSelectedColumn = getColumn(selectedPosition);
-			final int nextSelectedColumn = getColumn(selectedPosition + 1);
-			if(nextSelectedColumn != currentSelectedColumn) {
-				return INVALID_POSITION;
-			} else {
-				return selectedPosition + 1;
+			int[] positionRange = getPositionRangeByColumn(currentSelectedColumn);
+			for(int pos = selectedPosition + 1; pos <= positionRange[1]; pos++) {
+				if(mAdapter.isEnabled(pos)) {
+					return pos;
+				}
 			}
+			return INVALID_POSITION;
 		}
 	}
 	
