@@ -1646,20 +1646,61 @@ public class HGridView extends AdapterView<HGridAdapter> {
 		
 		int position = childIndex + mFirstPosition;
 		int column = getColumn(position);
-		int[] positionRange = getPositionRangeByColumn(column);
+		int[] positionRange = null;
+		int firstColumnInScreen = 0;
+		int lastColumnInScreen = 0;
 		switch(direction) {
 		case FOCUS_UP:
 			// coming from bottom, only valid if end of a column
-			return childIndex == positionRange[1];
+			// But when the end of a column is disabled, we move up to find
+			// the second.
+			positionRange = getPositionRangeByColumn(column);
+			for(int pos = positionRange[1]; pos >= positionRange[0]; pos--) {
+				if(mAdapter.isEnabled(pos)) {
+					return position == pos;
+				}
+			}
+			return false;
 		case FOCUS_DOWN:
+			positionRange = getPositionRangeByColumn(column);
 			// coming from top, only valid if start of a column.
-			return childIndex == positionRange[0];
+			for(int pos = positionRange[0]; pos <=positionRange[1]; pos++) {
+				if(mAdapter.isEnabled(pos)) {
+					return position == pos;
+				}
+			}
+			return false;
 		case FOCUS_LEFT:
 			// coming from right, need to be the last column.
-			return positionRange[1] == getChildCount() - 1;
+			lastColumnInScreen = getColumn(mFirstPosition + getChildCount() - 1);
+			firstColumnInScreen = getColumn(mFirstPosition);
+			while(lastColumnInScreen >= firstColumnInScreen) {
+				positionRange = getPositionRangeByColumn(lastColumnInScreen);
+				
+				for(int pos = positionRange[0]; pos <= positionRange[1]; pos++) {
+					if(mAdapter.isEnabled(pos)) {
+						return column == lastColumnInScreen;
+					}
+				}
+				lastColumnInScreen--;
+			}
+			
+			return false;
 		case FOCUS_RIGHT:
-			// coming from left, only vali if in the most left column.
-			return positionRange[0] == 0;
+			// coming from left, only valid if in the most left column.
+			firstColumnInScreen = getColumn(mFirstPosition);
+			lastColumnInScreen = getColumn(mFirstPosition + getChildCount() - 1);
+			while(firstColumnInScreen <= lastColumnInScreen) {
+				positionRange = getPositionRangeByColumn(firstColumnInScreen);
+
+				for(int pos = positionRange[0]; pos <= positionRange[1]; pos++) {
+					if(mAdapter.isEnabled(pos)) {
+						return column == firstColumnInScreen;
+					}
+				}
+			}
+			
+			return false;
 		default:
             throw new IllegalArgumentException("direction must be one of "
                     + "{FOCUS_UP, FOCUS_DOWN, FOCUS_LEFT, FOCUS_RIGHT}.");
@@ -1679,7 +1720,7 @@ public class HGridView extends AdapterView<HGridAdapter> {
             int minDistance = Integer.MAX_VALUE;
             final int childCount = getChildCount();
             for(int i = 0; i < childCount; i++) {
-            	if(!isCandidateSelection(i, direction)) {
+            	if(!isCandidateSelection(i, direction) || !mAdapter.isEnabled(mFirstPosition + i)) {
             		continue;
             	}
             	final View other = getChildAt(i);

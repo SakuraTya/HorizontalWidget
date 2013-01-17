@@ -4,36 +4,50 @@
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:orientation="vertical">
-    <org.sakuratya.horizontal.ui.HGridView
-        android:id="@+id/h_list_view"
+    <Button
         android:layout_width="match_parent"
-        android:layout_height="810dip"
-        sakura:enableFadingEdge="true"
-        sakura:horizontalFadeLength="137dip"
-        sakura:horizontalSpacing="50dip"
-        sakura:verticalSpacing="0dip"
-        sakura:sectionExtraSpacing="200dip"
-        sakura:rowHeight="252dip"
-        sakura:numRows="3"
-        sakura:selectorDrawable="@drawable/list_item_bg_hot"
-        sakura:labelDrawable="@drawable/section_label_drawable"
-        sakura:labelBackgroundDrawable="@drawable/section_shadow_bg"
-        sakura:labelTopOffset="8dip"
-        sakura:labelLeftOffset="35dip"
-        sakura:labelWidth="53dip"
-        sakura:labelHeight="118dip"
-        sakura:labelBackgroundLeftOffset="18dip"
-        sakura:labelBackgroundWidth="499dip"
-        sakura:labelBackgroundHeight="810dip"
-        sakura:labelTextSize="35sp"
-        sakura:labelTextColor="#FFBBBBBB"
-        sakura:labelTextMarginTop="20dip"
-        sakura:labelTextMarginLeft="7dip"
-        sakura:labelTextMarginBottom="20dip"
-        sakura:labelTextMarginRight="10dip"
-        >
-        
-    </org.sakuratya.horizontal.ui.HGridView>
+        android:layout_height="wrap_content"
+        android:text="Hello World"/>
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal">
+        <Button
+	        android:layout_width="wrap_content"
+	        android:layout_height="match_parent"
+	        android:text="l\ne\nf\nt"/>
+        <org.sakuratya.horizontal.ui.HGridView
+	        android:id="@+id/h_list_view"
+	        android:layout_width="match_parent"
+	        android:layout_height="810dip"
+	        sakura:enableFadingEdge="true"
+	        sakura:horizontalFadeLength="137dip"
+	        sakura:horizontalSpacing="50dip"
+	        sakura:verticalSpacing="0dip"
+	        sakura:sectionExtraSpacing="200dip"
+	        sakura:rowHeight="252dip"
+	        sakura:numRows="3"
+	        sakura:selectorDrawable="@drawable/list_item_bg_hot"
+	        sakura:labelDrawable="@drawable/section_label_drawable"
+	        sakura:labelBackgroundDrawable="@drawable/section_shadow_bg"
+	        sakura:labelTopOffset="8dip"
+	        sakura:labelLeftOffset="35dip"
+	        sakura:labelWidth="53dip"
+	        sakura:labelHeight="118dip"
+	        sakura:labelBackgroundLeftOffset="18dip"
+	        sakura:labelBackgroundWidth="499dip"
+	        sakura:labelBackgroundHeight="810dip"
+	        sakura:labelTextSize="35sp"
+	        sakura:labelTextColor="#FFBBBBBB"
+	        sakura:labelTextMarginTop="20dip"
+	        sakura:labelTextMarginLeft="7dip"
+	        sakura:labelTextMarginBottom="20dip"
+	        sakura:labelTextMarginRight="10dip"
+	        >
+	        
+	    </org.sakuratya.horizontal.ui.HGridView>
+    </LinearLayout>
+    
     <Button
         android:layout_width="match_parent"
         android:layout_height="wrap_content"

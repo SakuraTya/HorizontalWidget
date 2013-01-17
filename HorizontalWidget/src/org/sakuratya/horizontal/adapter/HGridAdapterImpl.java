@@ -69,7 +69,7 @@ public class HGridAdapterImpl extends HGridAdapter<ItemList> {
 			holder = (Holder) convertView.getTag();
 		}
 		String text = getItem(position);
-		if(position==0 || position ==8 || position == 6 || position == 7) {
+		if(position==1 || position ==8 || position == 6 || position == 7) {
 			holder.preview.setImageResource(R.drawable.selector);
 			holder.title.setText("disabled:"+position);
 		} else {
@@ -112,7 +112,7 @@ public class HGridAdapterImpl extends HGridAdapter<ItemList> {
 
 	@Override
 	public boolean isEnabled(int position) {
-		if(position==0 || position ==8 || position == 6 || position == 7) {
+		if(position==1 || position ==8 || position == 6 || position == 7) {
 			return false;
 		} else {
 			return true;
