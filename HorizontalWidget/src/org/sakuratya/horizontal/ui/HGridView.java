@@ -388,7 +388,7 @@ public class HGridView extends AdapterView<HGridAdapter> {
 				int firstCol = getColumn(mFirstPosition);
 				if(firstCol - 1 >= 0) {
 					// Fill columns that was opened before the mFirstPosition with more columns if possible.
-					if(Arrays.binarySearch(mSectionFirstColumns, firstCol)>=0) {
+					if(mAdapter.hasSection() && Arrays.binarySearch(mSectionFirstColumns, firstCol)>=0) {
 						fillLeft(firstCol - 1, firstChild.getLeft() - mHorizontalSpacing - mSectionExtraSpacing);
 					} else {
 						fillLeft(firstCol - 1, firstChild.getLeft() - mHorizontalSpacing);
@@ -425,14 +425,19 @@ public class HGridView extends AdapterView<HGridAdapter> {
 		
 		final int horizontalSpacing = mHorizontalSpacing;
 		final int sectionExtraSpacing = mSectionExtraSpacing;
-		View before;
 		
-		View after;
-		boolean isSectionFirst = Arrays.binarySearch(mSectionFirstColumns, motionCol) >= 0;
-		boolean isSectionLast = Arrays.binarySearch(mSectionLastColumns, motionCol) >= 0;
-		before = fillLeft(motionCol - 1, referenceView.getLeft() - (isSectionFirst ? (horizontalSpacing + sectionExtraSpacing) : horizontalSpacing));
+		int offsetLeft = horizontalSpacing;
+		int offsetRight = horizontalSpacing;
+		if(mAdapter.hasSection()) {
+			boolean isSectionFirst = Arrays.binarySearch(mSectionFirstColumns, motionCol) >= 0;
+			boolean isSectionLast = Arrays.binarySearch(mSectionLastColumns, motionCol) >= 0;
+			offsetLeft = isSectionFirst ? offsetLeft + sectionExtraSpacing : offsetLeft;
+			offsetRight = isSectionLast ? offsetRight + sectionExtraSpacing : offsetRight;
+		}
+		
+		View before = fillLeft(motionCol - 1, referenceView.getLeft() - offsetLeft);
 		adjustViewLeftAndRight();
-		after = fillRight(motionCol + 1, referenceView.getRight() + (isSectionLast ? (horizontalSpacing + sectionExtraSpacing) : horizontalSpacing));
+		View after = fillRight(motionCol + 1, referenceView.getRight() + offsetRight);
 		// Check if we have dragged the right end of the grid too left. 
 		final int childCount = getChildCount();
 		if(childCount > 0) {
@@ -467,15 +472,22 @@ public class HGridView extends AdapterView<HGridAdapter> {
 		adjustForLeftFadingEdge(referenceView, leftSelectionPixel, rightSelectionPixel);
 		adjustForRightFadingEdge(referenceView, leftSelectionPixel, rightSelectionPixel);
 		
-		boolean isSectionFirst = Arrays.binarySearch(mSectionFirstColumns, column) >= 0;
-		boolean isSectionLast = Arrays.binarySearch(mSectionLastColumns, column) >= 0;
+		int offsetLeft = horizontalSpacing;
+		int offsetRight = horizontalSpacing;
+		if(mAdapter.hasSection()) {
+			boolean isSectionFirst = Arrays.binarySearch(mSectionFirstColumns, column) >= 0;
+			boolean isSectionLast = Arrays.binarySearch(mSectionLastColumns, column) >= 0;
+			offsetLeft = isSectionFirst ? offsetLeft + sectionExtraSpacing : offsetLeft;
+			offsetRight= isSectionLast ? offsetRight + sectionExtraSpacing : offsetRight;
+		}
+		
 		int columnLeft = column - 1;
 		if(columnLeft >= 0) {
-			fillLeft(columnLeft, referenceView.getLeft() - (isSectionFirst ? (horizontalSpacing + sectionExtraSpacing) : horizontalSpacing));
+			fillLeft(columnLeft, referenceView.getLeft() - offsetLeft);
 		}
 		int columnRight = column + 1;
 		if(columnRight <= mMaxColumn) {
-			fillRight(columnRight, referenceView.getRight() + (isSectionLast ? (horizontalSpacing + sectionExtraSpacing) : horizontalSpacing));
+			fillRight(columnRight, referenceView.getRight() + offsetRight);
 		}
 		
 		return sel;
@@ -497,17 +509,24 @@ public class HGridView extends AdapterView<HGridAdapter> {
 		
 		final View referenceView = mReferenceView;
 		
-		boolean isSectionFirst = Arrays.binarySearch(mSectionFirstColumns, col) >= 0;
-		boolean isSectionLast = Arrays.binarySearch(mSectionLastColumns, col) >= 0;
+		int offsetLeft = horizontalSpacing;
+		int offsetRight = horizontalSpacing;
+		
+		if(mAdapter.hasSection()) {
+			boolean isSectionFirst = Arrays.binarySearch(mSectionFirstColumns, col) >= 0;
+			boolean isSectionLast = Arrays.binarySearch(mSectionLastColumns, col) >= 0;
+			offsetLeft = isSectionFirst ? offsetLeft + sectionExtraSpacing : offsetLeft;
+			offsetRight = isSectionLast ? offsetRight + sectionExtraSpacing : offsetRight;
+		}
 		
 		int columnRight = col + 1;
 		if(columnRight <= mMaxColumn) {
-			fillRight(columnRight, referenceView.getRight() + (isSectionLast ? (horizontalSpacing + sectionExtraSpacing) : horizontalSpacing));
+			fillRight(columnRight, referenceView.getRight() + offsetLeft);
 		}
 		pinToRight(childrenRight);
 		int columnLeft = col - 1;
 		if(columnLeft >= 0) {
-			fillLeft(columnLeft, referenceView.getLeft() - (isSectionFirst ? (sectionExtraSpacing + horizontalSpacing) : horizontalSpacing));
+			fillLeft(columnLeft, referenceView.getLeft() -offsetRight);
 		}
 		adjustViewLeftAndRight();
 		
@@ -539,11 +558,13 @@ public class HGridView extends AdapterView<HGridAdapter> {
 				selectedView = temp;
 			}
 			
-			boolean isSectionFirst = Arrays.binarySearch(mSectionFirstColumns, col) >= 0;
-
 			// mReferenceView will change with each call to makeColumn()
 			// do not cache in a local variable outside of this loop
-			nextRight = mReferenceView.getLeft() - (isSectionFirst ? (sectionExtraSpacing + horizontalSpacing) : horizontalSpacing);
+			if(mAdapter.hasSection() && Arrays.binarySearch(mSectionFirstColumns, col) >= 0) {
+				nextRight = mReferenceView.getLeft() - sectionExtraSpacing + horizontalSpacing;
+			} else {
+				nextRight = mReferenceView.getLeft() - horizontalSpacing;
+			}
 			
 			mFirstPosition = getPositionRangeByColumn(col)[0];
 			col--;
@@ -562,10 +583,11 @@ public class HGridView extends AdapterView<HGridAdapter> {
 			if(temp != null) {
 				selectedView = temp;
 			}
-			
-			boolean isSectionLast = Arrays.binarySearch(mSectionLastColumns, col) >= 0;
-			
-			nextLeft = mReferenceView.getRight() + (isSectionLast ? (sectionExtraSpacing + horizontalSpacing) : horizontalSpacing);
+			if(mAdapter.hasSection() && Arrays.binarySearch(mSectionLastColumns, col) >= 0) {
+				nextLeft = mReferenceView.getRight() + sectionExtraSpacing + horizontalSpacing;
+			} else {
+				nextLeft = mReferenceView.getRight() + horizontalSpacing;
+			}
 			
 			col++;
 		}
@@ -624,10 +646,16 @@ public class HGridView extends AdapterView<HGridAdapter> {
 			final int width = mReferenceViewInSelectedColumn == null ? 0: mReferenceViewInSelectedColumn.getWidth();
 			// disabled child may cause skip multiple columns.
 			int offset = width * (colDelta - 1);
-			for(int i=0; i < colDelta; i++) {
-				boolean isOldColSectionLast = Arrays.binarySearch(mSectionLastColumns, oldCol+i) >= 0;
-				offset += (isOldColSectionLast ? (sectionExtraSpacing + horizontalSpacing) : horizontalSpacing);
+			
+			if(mAdapter.hasSection()) {
+				for(int i=0; i < colDelta; i++) {
+					boolean isOldColSectionLast = Arrays.binarySearch(mSectionLastColumns, oldCol+i) >= 0;
+					offset += (isOldColSectionLast ? (sectionExtraSpacing + horizontalSpacing) : horizontalSpacing);
+				}
+			} else {
+				offset += horizontalSpacing * colDelta;
 			}
+			
 			selectedView = makeColumn(col, oldRight + offset, true);
 			referenceView = mReferenceView;
 			adjustForRightFadingEdge(referenceView, leftSelectionPixel, rightSelectionPixel);
@@ -638,10 +666,16 @@ public class HGridView extends AdapterView<HGridAdapter> {
 			final int oldLeft = mReferenceViewInSelectedColumn == null ? 0: mReferenceViewInSelectedColumn.getLeft();
 			final int width = mReferenceViewInSelectedColumn == null ? 0: mReferenceViewInSelectedColumn.getWidth();
 			int offset = width * (-colDelta - 1);
-			for(int i=0; i < -colDelta; i++) {
-				boolean isOldColSectionFirst = Arrays.binarySearch(mSectionFirstColumns, oldCol-i) >= 0;
-				offset += isOldColSectionFirst ? (sectionExtraSpacing + horizontalSpacing) : horizontalSpacing;
+			
+			if(mAdapter.hasSection()) {
+				for(int i=0; i < -colDelta; i++) {
+					boolean isOldColSectionFirst = Arrays.binarySearch(mSectionFirstColumns, oldCol-i) >= 0;
+					offset += isOldColSectionFirst ? (sectionExtraSpacing + horizontalSpacing) : horizontalSpacing;
+				}
+			} else {
+				offset = horizontalSpacing * (-colDelta);
 			}
+			
 			selectedView = makeColumn(col, oldLeft - offset, false);
 			referenceView = mReferenceView;
 			adjustForLeftFadingEdge(referenceView, leftSelectionPixel, rightSelectionPixel);
@@ -654,15 +688,22 @@ public class HGridView extends AdapterView<HGridAdapter> {
 			referenceView = mReferenceView;
 			
 		}
-		boolean isColSectionFirst = Arrays.binarySearch(mSectionFirstColumns, col) >= 0;
-		boolean isColSectionLast = Arrays.binarySearch(mSectionLastColumns, col) >= 0;
+		int offsetLeft = horizontalSpacing;
+		int offsetRight = horizontalSpacing;
+		if(mAdapter.hasSection()) {
+			boolean isColSectionFirst = Arrays.binarySearch(mSectionFirstColumns, col) >= 0;
+			boolean isColSectionLast = Arrays.binarySearch(mSectionLastColumns, col) >= 0;
+			offsetLeft = isColSectionFirst ? offsetLeft + sectionExtraSpacing : offsetLeft;
+			offsetRight = isColSectionLast ? offsetRight + sectionExtraSpacing : offsetRight;
+		}
+		
 		int columnLeft = col - 1;
 		if(columnLeft >= 0) {
-			fillLeft(columnLeft, referenceView.getLeft() - (isColSectionFirst ? (sectionExtraSpacing + horizontalSpacing) :horizontalSpacing));
+			fillLeft(columnLeft, referenceView.getLeft() - offsetLeft);
 		}
 		int columnRight = col + 1;
 		if(columnRight <= mMaxColumn) {
-			fillRight(columnRight, referenceView.getRight() + (isColSectionLast ? (sectionExtraSpacing + horizontalSpacing) : horizontalSpacing));
+			fillRight(columnRight, referenceView.getRight() + offsetRight);
 		}
 		return selectedView;
 	}

@@ -38,4 +38,12 @@
         android:layout_marginTop="4dip"
         android:layout_marginRight="10dip"
         android:id="@+id/list_item_quality_label"/>
+    <ProgressBar
+        android:layout_width="345dip"
+        android:layout_height="10dip"
+        android:layout_alignParentTop="true"
+        android:id="@+id/list_item_progress"
+        android:max="100"
+        style="@android:style/Widget.ProgressBar.Horizontal"
+        android:visibility="invisible"/>
 </RelativeLayout>

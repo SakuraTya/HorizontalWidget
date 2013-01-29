@@ -3,6 +3,7 @@ package org.sakuratya.horizontal.adapter;
 import java.util.ArrayList;
 
 import org.sakuratya.horizontal.R;
+import org.sakuratya.horizontal.model.Item;
 import org.sakuratya.horizontal.model.ItemList;
 
 import android.content.Context;
@@ -10,6 +11,7 @@ import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.ImageView;
+import android.widget.ProgressBar;
 import android.widget.TextView;
 
 public class HGridAdapterImpl extends HGridAdapter<ItemList> {
@@ -36,7 +38,7 @@ public class HGridAdapterImpl extends HGridAdapter<ItemList> {
 	}
 
 	@Override
-	public String getItem(int position) {
+	public Item getItem(int position) {
 		int size = 0;
 		for(int i=0; i<mList.size(); i++) {
 			final int sectionCount = mList.get(i).count;
@@ -64,11 +66,16 @@ public class HGridAdapterImpl extends HGridAdapter<ItemList> {
 			holder.title = (TextView) convertView.findViewById(R.id.list_item_title);
 			holder.preview = (ImageView) convertView.findViewById(R.id.list_item_preview_img);
 			holder.quality = (ImageView) convertView.findViewById(R.id.list_item_quality_label);
+			holder.progress = (ProgressBar) convertView.findViewById(R.id.list_item_progress);
 			convertView.setTag(holder);
 		} else {
 			holder = (Holder) convertView.getTag();
 		}
-		String text = getItem(position);
+		Item item = getItem(position);
+		String text = item.title;
+		
+//		holder.progress.setVisibility(item.isInProgress?View.VISIBLE:View.INVISIBLE);
+		
 		if(position==1 || position ==8 || position == 6 || position == 7) {
 			holder.preview.setImageResource(R.drawable.selector);
 			holder.title.setText("disabled:"+position);
@@ -101,6 +108,7 @@ public class HGridAdapterImpl extends HGridAdapter<ItemList> {
 		TextView title;
 		ImageView preview;
 		ImageView quality;
+		ProgressBar progress;
 	}
 
 	@Override
@@ -118,5 +126,5 @@ public class HGridAdapterImpl extends HGridAdapter<ItemList> {
 			return true;
 		}
 	}
-	
+
 }

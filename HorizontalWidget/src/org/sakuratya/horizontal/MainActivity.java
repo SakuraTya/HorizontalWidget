@@ -6,6 +6,7 @@ import org.sakuratya.horizontal.adapter.HGridAdapterImpl;
 import org.sakuratya.horizontal.model.ItemList;
 import org.sakuratya.horizontal.ui.HGridView;
 import org.sakuratya.horizontal.ui.HGridView.OnScrollListener;
+import org.sakuratya.horizontal.model.Item;
 
 import android.app.Activity;
 import android.graphics.Paint;
@@ -15,6 +16,7 @@ import android.view.View;
 import android.widget.AdapterView;
 import android.widget.AdapterView.OnItemClickListener;
 import android.widget.AdapterView.OnItemSelectedListener;
+import android.widget.ProgressBar;
 import android.widget.TextView;
 
 public class MainActivity extends Activity implements OnItemClickListener, OnScrollListener, OnItemSelectedListener {
@@ -39,15 +41,18 @@ public class MainActivity extends Activity implements OnItemClickListener, OnScr
 	private void buildHGridView() {
 		mHGridView = (HGridView) findViewById(R.id.h_list_view);
         
-        for(int i=0; i < 10; i++) {
-        	ItemList item = new ItemList();
-        	item.objects = new ArrayList<String>();
-        	item.title = "section"+i;
+        for(int i=0; i < 1; i++) {
+        	ItemList items = new ItemList();
+        	items.objects = new ArrayList<Item>();
+        	items.title = "section"+i;
         	for(int j=0; j < 20; j++) {
-        		item.objects.add("title: "+j);
-        		item.count++;
+        		Item item = new Item();
+        		item.title = "title" + j;
+        		item.isInProgress = false;
+        		items.objects.add(item);
+        		items.count++;
         	}
-        	mItemLists.add(item);
+        	mItemLists.add(items);
         }
         
         Paint labelTextPaint = new Paint();
@@ -80,6 +85,11 @@ public class MainActivity extends Activity implements OnItemClickListener, OnScr
 	public void onItemClick(AdapterView<?> parent, View view, int position,
 			long id) {
 		Log.d(TAG, "click item is "+ position);
+		Item item = mHGridViewAdapter.getItem(position);
+		
+//		item.isInProgress = true;
+		ProgressBar pb = (ProgressBar) view.findViewById(R.id.list_item_progress);
+		pb.setVisibility(View.VISIBLE);
 	}
 
 	@Override

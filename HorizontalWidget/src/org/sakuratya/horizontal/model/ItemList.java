@@ -9,7 +9,7 @@ public class ItemList implements Serializable {
 	
 	public int count;
 	public int num_pages;
-	public ArrayList<String> objects;
+	public ArrayList<Item> objects;
 	public String slug;
 	public String title;
 }
