@@ -2419,4 +2419,14 @@ public class HGridView extends AdapterView<HGridAdapter> {
 		}
 		return false;
 	}
+
+	@Override
+	protected void onSizeChanged(int w, int h, int oldw, int oldh) {
+		if (getChildCount() > 0) {
+            mDataChanged = true;
+            rememberSyncState();
+        }
+	}
+	
+	
 }
